@@ -12,6 +12,7 @@ import {
   validarPoliticaListaDisparo,
 } from "@/lib/whatsapp/disparo-politica-lista";
 import { buscarTelefonesSuprimidos } from "@/lib/whatsapp/opt-out";
+import { validarConsentimentoSemOptOut } from "@/lib/whatsapp/disparo-consentimento-sem-opt-out";
 import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
 import { obterDisponibilidadeAgendamentoMeta } from "@/lib/whatsapp/meta-limites";
 import {
@@ -227,6 +228,8 @@ export async function POST(request: NextRequest) {
     })) : [];
     const responsabilidadeListaFriaConfirmada =
       body?.confirmacao_responsabilidade_lista_fria === true;
+    const confirmacaoSemOptOutCiencia = body?.confirmacao_sem_opt_out_ciencia === true;
+    const confirmacaoSemOptOutAutorizacao = body?.confirmacao_sem_opt_out_autorizacao === true;
 
     if (!integracaoWhatsappId) {
       return NextResponse.json(
@@ -369,6 +372,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const consentimentoSemOptOut = validarConsentimentoSemOptOut({
+      categoria: template.categoria,
+      optOutHabilitado: template.opt_out_habilitado,
+      cienciaRiscos: confirmacaoSemOptOutCiencia,
+      autorizacaoContatos: confirmacaoSemOptOutAutorizacao,
+    });
+    if (!consentimentoSemOptOut.ok) {
+      return NextResponse.json({ ok: false, code: "CONFIRMACAO_SEM_OPT_OUT_OBRIGATORIA", error: consentimentoSemOptOut.error }, { status: 422 });
+    }
+    const consentimentoSemOptOutRegistro = consentimentoSemOptOut.necessario
+      ? { ciencia_riscos: true, autorizacao_contatos: true, confirmado_em: new Date().toISOString(), usuario_id: usuario.id, template_id: template.id, versao: 1 }
+      : null;
+
     const telefonesSuprimidos = await buscarTelefonesSuprimidos({
       empresaId: usuario.empresa_id,
       telefones: todosNumeros,
@@ -404,23 +420,7 @@ export async function POST(request: NextRequest) {
       responsabilidadeListaFriaConfirmada,
     });
 
-    if (
-      ["utility", "marketing"].includes(politicaLista.categoria) &&
-      classificacaoLista.totalFrios > 0 &&
-      template.opt_out_habilitado !== true
-    ) {
-      return NextResponse.json(
-        {
-          ok: false,
-          code: "TEMPLATE_SEM_OPT_OUT",
-          error:
-            "Templates enviados para lista fria precisam conter o rodape de opt-out. Recrie o template com a instrucao para responder SAIR.",
-        },
-        { status: 422 }
-      );
-    }
-
-    if (!politicaLista.ok) {
+     if (!politicaLista.ok) {
       return NextResponse.json(
         {
           ok: false,
@@ -685,6 +685,7 @@ export async function POST(request: NextRequest) {
           ["utility", "marketing"].includes(politicaLista.categoria) &&
           classificacaoLista.totalFrios > 0 &&
           responsabilidadeListaFriaConfirmada,
+        consentimento_template_sem_opt_out: consentimentoSemOptOutRegistro,
         contato_nome: contato.nome,
         integracao_nome: integracao.nome_conexao || integracao.numero || null,
         automacao_no_titulo: "Disparo manual agendado",
@@ -738,6 +739,7 @@ export async function POST(request: NextRequest) {
           ["utility", "marketing"].includes(politicaLista.categoria) &&
           classificacaoLista.totalFrios > 0 &&
           responsabilidadeListaFriaConfirmada,
+        consentimento_template_sem_opt_out: consentimentoSemOptOutRegistro,
       },
       metadata: {
         disparos_ids: (disparosCriados || []).map((disparo) => disparo.id),

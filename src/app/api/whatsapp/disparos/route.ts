@@ -29,6 +29,7 @@ import {
   validarPoliticaListaDisparo,
 } from "@/lib/whatsapp/disparo-politica-lista";
 import { buscarTelefonesSuprimidos } from "@/lib/whatsapp/opt-out";
+import { validarConsentimentoSemOptOut } from "@/lib/whatsapp/disparo-consentimento-sem-opt-out";
 import { buscarTelefonesEmCooldownDisparo } from "@/lib/whatsapp/disparo-cooldown";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { normalizarChaveVariavelFluxo } from "@/lib/automacoes/variaveis-fixas-contato";
@@ -586,6 +587,8 @@ export async function POST(req: NextRequest) {
       : [];
     const responsabilidadeListaFriaConfirmada =
       body?.confirmacao_responsabilidade_lista_fria === true;
+    const confirmacaoSemOptOutCiencia = body?.confirmacao_sem_opt_out_ciencia === true;
+    const confirmacaoSemOptOutAutorizacao = body?.confirmacao_sem_opt_out_autorizacao === true;
 
     if (!usuario?.empresa_id) {
       return NextResponse.json(
@@ -853,6 +856,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const consentimentoSemOptOut = validarConsentimentoSemOptOut({
+      categoria: template.categoria,
+      optOutHabilitado: template.opt_out_habilitado,
+      cienciaRiscos: confirmacaoSemOptOutCiencia,
+      autorizacaoContatos: confirmacaoSemOptOutAutorizacao,
+    });
+    if (!consentimentoSemOptOut.ok) {
+      return NextResponse.json({ ok: false, code: "CONFIRMACAO_SEM_OPT_OUT_OBRIGATORIA", error: consentimentoSemOptOut.error }, { status: 422 });
+    }
+    const consentimentoSemOptOutRegistro = consentimentoSemOptOut.necessario
+      ? { ciencia_riscos: true, autorizacao_contatos: true, confirmado_em: new Date().toISOString(), usuario_id: usuario.id, template_id: template.id, versao: 1 }
+      : null;
+
     const configJson = (integracao.config_json || null) as ConfigJsonWhatsapp | null;
     const credenciais = obterCredenciaisBasicas({
       phoneNumberId: integracao.phone_number_id,
@@ -942,6 +958,7 @@ export async function POST(req: NextRequest) {
           variaveis_config: variaveisConfig,
           responsabilidade_lista_fria_confirmada:
             responsabilidadeListaFriaConfirmada,
+          consentimento_template_sem_opt_out: consentimentoSemOptOutRegistro,
           nome_campanha_informado: nomeCampanhaInformado || null,
         },
       })
@@ -1011,6 +1028,7 @@ export async function POST(req: NextRequest) {
               variaveis_config: variaveisConfig,
               responsabilidade_lista_fria_confirmada:
                 responsabilidadeListaFriaConfirmada,
+              consentimento_template_sem_opt_out: consentimentoSemOptOutRegistro,
               nome_campanha_informado: nomeCampanhaInformado || null,
             },
             updated_at: new Date().toISOString(),
@@ -1063,17 +1081,7 @@ export async function POST(req: NextRequest) {
           responsabilidadeListaFriaConfirmada,
         });
 
-        if (
-          ["utility", "marketing"].includes(politicaLista.categoria) &&
-          classificacaoLista.totalFrios > 0 &&
-          template.opt_out_habilitado !== true
-        ) {
-          throw new Error(
-            "Templates enviados para lista fria precisam conter o rodape de opt-out. Recrie o template com a instrucao para responder SAIR."
-          );
-        }
-
-        if (!politicaLista.ok) {
+         if (!politicaLista.ok) {
           throw new Error(politicaLista.error);
         }
 
@@ -1141,6 +1149,7 @@ export async function POST(req: NextRequest) {
                 ["utility", "marketing"].includes(politicaLista.categoria) &&
                 classificacaoLista.totalFrios > 0 &&
                 responsabilidadeListaFriaConfirmada,
+              consentimento_template_sem_opt_out: consentimentoSemOptOutRegistro,
               limite_meta_origem: reservaLimite.limiteInfo?.origem || null,
               limite_meta_tier: reservaLimite.limiteInfo?.tier || null,
               nome_campanha_informado: nomeCampanhaInformado || null,
@@ -1209,6 +1218,7 @@ export async function POST(req: NextRequest) {
                 ["utility", "marketing"].includes(politicaLista.categoria) &&
                 classificacaoLista.totalFrios > 0 &&
                 responsabilidadeListaFriaConfirmada,
+              consentimento_template_sem_opt_out: consentimentoSemOptOutRegistro,
               limite_meta_origem: reservaLimite.limiteInfo?.origem || null,
               limite_meta_tier: reservaLimite.limiteInfo?.tier || null,
               nome_campanha_informado: nomeCampanhaInformado || null,
@@ -1241,6 +1251,7 @@ export async function POST(req: NextRequest) {
               ["utility", "marketing"].includes(politicaLista.categoria) &&
               classificacaoLista.totalFrios > 0 &&
               responsabilidadeListaFriaConfirmada,
+            consentimento_template_sem_opt_out: consentimentoSemOptOutRegistro,
           },
           ip: auditMeta.ip,
           user_agent: auditMeta.user_agent,
@@ -1279,6 +1290,7 @@ export async function POST(req: NextRequest) {
               variaveis_config: variaveisConfig,
               responsabilidade_lista_fria_confirmada:
                 responsabilidadeListaFriaConfirmada,
+              consentimento_template_sem_opt_out: consentimentoSemOptOutRegistro,
               nome_campanha_informado: nomeCampanhaInformado || null,
               preparacao_falhou_em: new Date().toISOString(),
             },

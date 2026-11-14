@@ -2217,6 +2217,27 @@
   margin-top: 3px;
 }
 
+/* Consentimento quando o template não possui rodapé automático de opt-out. */
+.optOutConsentCard {
+  margin: 14px 0;
+  padding: 18px;
+  border: 1px solid color-mix(in srgb, var(--crm-warning-text) 28%, var(--crm-border));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--crm-warning-bg) 39%, var(--crm-surface));
+}
+.optOutConsentHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: var(--crm-warning-text);
+}
+.optOutConsentHeader > svg { flex-shrink: 0; margin-top: 2px; }
+.optOutConsentHeader strong { display: block; font-size: 15px; }
+.optOutConsentHeader p { margin: 7px 0 12px; color: var(--crm-text); font-size: 13px; line-height: 1.6; }
+.optOutConsentOptions { display: grid; gap: 10px; }
+.optOutConsentOptions .modalCheckbox { cursor: pointer; background: var(--crm-surface); }
+.optOutConsentOptions .modalCheckbox span strong { display: block; }
+
 /* Confirmação de cobrança da etapa 4: destaque visual sem bloquear o botão. */
 .disparoWizardBillingConsent {
   align-items: center;

@@ -2481,6 +2481,8 @@ export default function DisparosWhatsAppPage() {
   const [paginaHistorico, setPaginaHistorico] = useState(1);
 
   const [confirmacaoCobranca, setConfirmacaoCobranca] = useState(false);
+  const [confirmacaoSemOptOutCiencia, setConfirmacaoSemOptOutCiencia] = useState(false);
+  const [confirmacaoSemOptOutAutorizacao, setConfirmacaoSemOptOutAutorizacao] = useState(false);
   const [
     modalResponsabilidadeListaFriaAberto,
     setModalResponsabilidadeListaFriaAberto,
@@ -3731,6 +3733,8 @@ export default function DisparosWhatsAppPage() {
     setAgendamentoHora("");
     setPreviewCusto(null);
     setConfirmacaoCobranca(false);
+    setConfirmacaoSemOptOutCiencia(false);
+    setConfirmacaoSemOptOutAutorizacao(false);
     setEtapaDisparo(1);
     setConfirmacaoResponsabilidadeListaFria(false);
     setModalResponsabilidadeListaFriaAberto(false);
@@ -4280,8 +4284,9 @@ export default function DisparosWhatsAppPage() {
     categoriaTemplateSelecionado === "utility" && temContatosListaFria;
   const templateComListaFria =
     marketingComListaFria || utilityComListaFria;
-  const listaFriaSemOptOut =
-    templateComListaFria &&
+  const templateSemOptOut =
+    Boolean(templateSelecionado) &&
+    ["marketing", "utility"].includes(categoriaTemplateSelecionado) &&
     templateSelecionado?.opt_out_habilitado !== true;
 
   const totalVariaveis = useMemo(() => {
@@ -5700,10 +5705,9 @@ export default function DisparosWhatsAppPage() {
       return;
     }
 
-    if (listaFriaSemOptOut) {
-      setErro(
-        "Este template não possui o rodapé de opt-out necessário para envio à lista fria. Recrie o template com a instrução para responder SAIR."
-      );
+    if (templateSemOptOut && (!confirmacaoSemOptOutCiencia || !confirmacaoSemOptOutAutorizacao)) {
+      setErro("Marque os dois consentimentos para enviar sem o opt-out padrão.");
+      destacarCampoDisparo("consentimento-sem-opt-out");
       return;
     }
 
@@ -5823,6 +5827,8 @@ export default function DisparosWhatsAppPage() {
             confirmacao_responsabilidade_lista_fria:
               templateComListaFria &&
               confirmacaoResponsabilidadeListaFria,
+            confirmacao_sem_opt_out_ciencia: templateSemOptOut && confirmacaoSemOptOutCiencia,
+            confirmacao_sem_opt_out_autorizacao: templateSemOptOut && confirmacaoSemOptOutAutorizacao,
             contatos: contatosPrincipais.map((contato) => ({
               id: contato.id,
               nome: contato.nome,
@@ -5870,6 +5876,8 @@ export default function DisparosWhatsAppPage() {
         setContatosSelecionados([]);
         setModalCriacaoDisparoAberto(false);
         setConfirmacaoCobranca(false);
+        setConfirmacaoSemOptOutCiencia(false);
+        setConfirmacaoSemOptOutAutorizacao(false);
         setEtapaDisparo(1);
         return;
       }
@@ -5911,6 +5919,8 @@ export default function DisparosWhatsAppPage() {
           confirmacao_responsabilidade_lista_fria:
             templateComListaFria &&
             confirmacaoResponsabilidadeListaFria,
+          confirmacao_sem_opt_out_ciencia: templateSemOptOut && confirmacaoSemOptOutCiencia,
+          confirmacao_sem_opt_out_autorizacao: templateSemOptOut && confirmacaoSemOptOutAutorizacao,
           destinatarios: destinatarios.slice(0, contatosPrincipais.length),
           reserva_ativa: contatosReservaAtivos && contatosReserva.length > 0,
           meta_quantidade_desejada: quantidadeDesejada,
@@ -6173,6 +6183,8 @@ export default function DisparosWhatsAppPage() {
 
   function abrirModalCriacaoDisparo() {
     if (!podeDisparar || loadingUsuario || loadingIntegracoes) return;
+    setConfirmacaoSemOptOutCiencia(false);
+    setConfirmacaoSemOptOutAutorizacao(false);
     setErro("");
     setEtapaDisparo(1);
     setModalCriacaoDisparoAberto(true);
@@ -6393,22 +6405,22 @@ export default function DisparosWhatsAppPage() {
       return;
     }
 
-    if (listaFriaSemOptOut) {
-      setErro(
-        "Este template não possui o rodapé de opt-out necessário para envio à lista fria. Recrie o template com a instrução para responder SAIR."
-      );
-      return;
-    }
-
     setErro("");
     setCampoPendente("");
     setCampoAnimando("");
     setConfirmacaoCobranca(false);
+    setConfirmacaoSemOptOutCiencia(false);
+    setConfirmacaoSemOptOutAutorizacao(false);
     setConfirmacaoResponsabilidadeListaFria(false);
     setEtapaDisparo(4);
   }
 
   async function confirmarEDisparar() {
+    if (templateSemOptOut && (!confirmacaoSemOptOutCiencia || !confirmacaoSemOptOutAutorizacao)) {
+      setErro("Confirme as duas declarações antes de enviar sem opt-out padrão.");
+      destacarCampoDisparo("consentimento-sem-opt-out");
+      return;
+    }
     if (!confirmacaoCobranca) {
       setErro("Para enviar o disparo, é necessário marcar a confirmação de ciência sobre possíveis cobranças.");
       destacarCampoDisparo("confirmacao-cobranca");
@@ -6663,6 +6675,8 @@ export default function DisparosWhatsAppPage() {
                             setAgendamentoHora("");
                             setContatosSelecionados([]);
                             setConfirmacaoResponsabilidadeListaFria(false);
+                            setConfirmacaoSemOptOutCiencia(false);
+                            setConfirmacaoSemOptOutAutorizacao(false);
                             setOptInFiltro("");
                             setOptOutFiltro("");
                             if (!proximaIntegracaoId) {
@@ -6687,7 +6701,11 @@ export default function DisparosWhatsAppPage() {
                         <label className={styles.label}>Template aprovado</label>
                         <select
                           value={templateId}
-                          onChange={(e) => setTemplateId(e.target.value)}
+                          onChange={(e) => {
+                            setTemplateId(e.target.value);
+                            setConfirmacaoSemOptOutCiencia(false);
+                            setConfirmacaoSemOptOutAutorizacao(false);
+                          }}
                           className={styles.input}
                           disabled={!integracaoId || loadingTemplates}
                         >
@@ -7904,25 +7922,17 @@ export default function DisparosWhatsAppPage() {
                 </section>
                   {temContatosListaFria ? (
                     <div
-                      className={`${styles.coldListNotice} ${
-                        listaFriaSemOptOut
-                          ? styles.coldListNoticeBlocked
-                          : styles.coldListNoticeWarning
-                      }`}
-                      role={
-                        listaFriaSemOptOut
-                          ? "alert"
-                          : "status"
-                      }
+                      className={`${styles.coldListNotice} ${styles.coldListNoticeWarning}`}
+                      role="status"
                     >
                       <strong>
-                        {listaFriaSemOptOut
-                          ? "Template sem opt-out"
+                        {templateSemOptOut
+                          ? "Template sem opt-out padrão"
                           : `${totalContatosListaFria} contato(s) de lista fria selecionado(s)`}
                       </strong>
                       <p>
-                        {listaFriaSemOptOut
-                          ? "Este template não possui o rodapé de opt-out necessário para envio à lista fria. Recrie-o com a instrução para responder SAIR."
+                        {templateSemOptOut
+                          ? "Para utilizar este template sem rodapé de opt-out, será necessário confirmar os dois consentimentos na etapa 4. Pedidos anteriores de opt-out permanecem bloqueados."
                           : marketingComListaFria
                           ? "O disparo de marketing para lista fria será liberado após a confirmação dos valores e das orientações de autorização."
                           : "O disparo Utility para lista fria exigirá confirmação das orientações após a confirmação dos valores."}
@@ -8045,6 +8055,51 @@ export default function DisparosWhatsAppPage() {
                   <li>Após a confirmação, o disparo será enfileirado e processado gradualmente.</li>
                 </ul>
               </div>
+
+              {templateSemOptOut ? (
+                <section
+                  className={styles.optOutConsentCard}
+                  data-disparo-campo="consentimento-sem-opt-out"
+                  data-disparo-invalido={campoPendente === "consentimento-sem-opt-out"}
+                  data-disparo-destaque={campoAnimando === "consentimento-sem-opt-out"}
+                  aria-labelledby="consentimento-sem-opt-out-titulo"
+                >
+                  <div className={styles.optOutConsentHeader}>
+                    <AlertTriangle size={20} aria-hidden="true" />
+                    <div>
+                      <strong id="consentimento-sem-opt-out-titulo">Enviar sem o opt-out padrão do sistema</strong>
+                      <p>
+                        Este template não inclui a instrução automática para o destinatário
+                        interromper os envios. A ausência desse recurso pode gerar mais
+                        denúncias, bloqueios e restrições na Meta. A confirmação não substitui
+                        a autorização dos contatos nem permite enviar para quem pediu opt-out.
+                      </p>
+                    </div>
+                  </div>
+                  <div className={styles.optOutConsentOptions}>
+                    <label className={styles.modalCheckbox}>
+                      <input type="checkbox" checked={confirmacaoSemOptOutCiencia}
+                        onChange={(e) => {
+                          setConfirmacaoSemOptOutCiencia(e.target.checked);
+                          if (e.target.checked) limparErroDisparo("consentimento-sem-opt-out");
+                        }} aria-required="true" />
+                      <span><strong>Estou ciente dos riscos.</strong> Sei que o template não possui
+                        o opt-out padrão e assumo a responsabilidade por utilizar esse conteúdo.</span>
+                    </label>
+                    <label className={styles.modalCheckbox}>
+                      <input type="checkbox" checked={confirmacaoSemOptOutAutorizacao}
+                        onChange={(e) => {
+                          setConfirmacaoSemOptOutAutorizacao(e.target.checked);
+                          if (e.target.checked) limparErroDisparo("consentimento-sem-opt-out");
+                        }} aria-required="true" />
+                      <span><strong>Confirmo a autorização dos destinatários.</strong> Possuo base
+                        adequada para este envio e respeitarei quaisquer pedidos para não receber
+                        novas mensagens, mesmo sem o rodapé padrão.</span>
+                    </label>
+                  </div>
+                  {orientacaoCampoDisparo("consentimento-sem-opt-out")}
+                </section>
+              ) : null}
 
               <label
                 className={`${styles.modalCheckbox} ${styles.disparoWizardBillingConsent}`}
@@ -8192,7 +8247,7 @@ export default function DisparosWhatsAppPage() {
                             onClick={confirmarEDisparar}
                             disabled={disparando || loadingConflitos ||
                               temConflitosPendentes || temVariaveisObrigatoriasPendentes ||
-                              temContatosOptOut || temContatosCooldown || listaFriaSemOptOut ||
+                              temContatosOptOut || temContatosCooldown ||
                               (!agendarDisparo && (disparoBloqueado || selecaoExcedeLimite)) ||
                               agendamentoInvalidoPeloLimiteMeta || loadingPreviewCusto}>
                             {disparando ? "Processando..." :
