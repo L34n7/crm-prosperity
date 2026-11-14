@@ -254,6 +254,7 @@ async function handleReaction(params: {
 async function handleRevoke(params: {
   empresaId: string;
   message: WhatsAppSpecialMessage;
+  source?: "business_app";
 }) {
   const originalMessageId = originalMessageIdFromRevoke(params.message);
   if (!originalMessageId) return { found: false, originalMessageId: null };
@@ -275,11 +276,14 @@ async function handleRevoke(params: {
   const { error } = await supabaseAdmin
     .from("mensagens")
     .update({
-      conteudo: "Mensagem apagada pelo contato",
+      conteudo: params.source === "business_app"
+        ? "Mensagem apagada no WhatsApp Business"
+        : "Mensagem apagada pelo contato",
       tipo_mensagem: "texto",
       metadata_json: {
         ...metadata,
         mensagem_revogada_whatsapp: true,
+        ...(params.source === "business_app" ? { revogacao_origem: "business_app" } : {}),
         revogada_em: eventTimestamp,
         revogacao_evento_id: eventId,
         revogacao_mensagem_original_id: originalMessageId,
@@ -298,6 +302,21 @@ async function handleRevoke(params: {
   }
 
   return { found: true, originalMessageId };
+}
+
+/** Aplica a mesma revogação das mensagens recebidas aos ecos do WhatsApp Business.
+ * Se o original estiver no CRM, marca o original como apagado e mantém seu conteúdo anterior.
+ * Quando não existir, o eco será apresentado como exclusão isolada pela Coexistência.
+ */
+export async function tratarRevogacaoEcoBusinessApp(params: {
+  empresaId: string;
+  message: WhatsAppIncomingRawMessage;
+}) {
+  return handleRevoke({
+    empresaId: params.empresaId,
+    message: params.message as WhatsAppSpecialMessage,
+    source: "business_app",
+  });
 }
 
 async function handleEdit(params: {
@@ -393,6 +412,7 @@ function normalizeUnknownType(message: WhatsAppSpecialMessage) {
 
 function sanitizeNonLiveMessages(
   messages: WhatsAppIncomingRawMessage[] | undefined,
+  preserveBusinessRevoke = false,
 ) {
   if (!messages?.length) return;
 
@@ -402,7 +422,7 @@ function sanitizeNonLiveMessages(
     const message = raw as WhatsAppSpecialMessage;
     const type = String(message.type || "unknown").trim() || "unknown";
 
-    if (MUTATION_TYPES.has(type)) continue;
+    if (MUTATION_TYPES.has(type) && !(preserveBusinessRevoke && type === "revoke")) continue;
 
     if (type === "sticker") {
       normalizeSticker(message);
@@ -472,7 +492,7 @@ export async function treatWhatsAppSpecialEvents(
     for (const change of entry.changes || []) {
       if (change.field !== "messages") {
         if (change.field === "smb_message_echoes") {
-          sanitizeNonLiveMessages(change.value?.message_echoes);
+          sanitizeNonLiveMessages(change.value?.message_echoes, true);
         } else if (change.field === "history") {
           for (const history of change.value?.history || []) {
             for (const thread of history.threads || []) {

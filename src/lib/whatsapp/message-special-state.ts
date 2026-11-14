@@ -72,7 +72,12 @@ export function getWhatsAppMessageSpecialState(
     : {};
   const currentContent = contentValue(message.conteudo);
   const edited = booleanValue(metadata.mensagem_editada_whatsapp);
-  const revoked = booleanValue(metadata.mensagem_revogada_whatsapp);
+  const isCoexBusinessRevoke =
+    metadata.coex_source === "business_app" &&
+    metadata.coex_direction === "outbound" &&
+    textValue(metadata.tipo_original_whatsapp).toLowerCase() === "revoke";
+  const revoked = booleanValue(metadata.mensagem_revogada_whatsapp) ||
+    isCoexBusinessRevoke;
 
   return {
     reactions: normalizeReactions(metadata.reacoes_whatsapp),
@@ -83,7 +88,8 @@ export function getWhatsAppMessageSpecialState(
       : null,
     currentContent,
     deletedContent: revoked
-      ? contentValue(metadata.conteudo_antes_revogacao) || currentContent || null
+      ? contentValue(metadata.conteudo_antes_revogacao) ||
+        (isCoexBusinessRevoke ? null : currentContent || null)
       : null,
   };
 }

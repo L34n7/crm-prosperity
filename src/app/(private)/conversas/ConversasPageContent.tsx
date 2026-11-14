@@ -8862,12 +8862,16 @@ const templateFooterTexto = useMemo(() => {
                                                   <TextoComEmoji
                                                     texto={
                                                       eventoWhatsapp.deletedContent ||
-                                                      "Conteúdo removido"
+                                                      "Mensagem apagada"
                                                     }
                                                   />
                                                 </p>
                                                 <span className={styles.deletedBadge}>
-                                                  Apagada pelo contato
+                                                  {msg.remetente_tipo === "usuario" &&
+                                                  (getMensagemMetadataDisparo(msg).revogacao_origem === "business_app" ||
+                                                   getMensagemMetadataDisparo(msg).coex_source === "business_app")
+                                                    ? "Apagada no WhatsApp Business"
+                                                    : "Apagada pelo contato"}
                                                 </span>
                                               </div>
                                             ) : eventoWhatsapp.edited ? (

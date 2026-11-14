@@ -23,6 +23,7 @@ import {
   refreshCoexistenceHistoryStats,
 } from "@/lib/whatsapp/coexistence-history-queue";
 import { assumirAtendimentoPeloWhatsappBusinessApp } from "@/lib/automacoes/assumir-atendimento-business-app";
+import { tratarRevogacaoEcoBusinessApp } from "@/lib/whatsapp/process-special-events";
 
 const supabase = getSupabaseAdmin();
 
@@ -153,6 +154,7 @@ async function saveCoexistenceMessage(params: {
     };
   }
 
+  const eventoRevogacao = String(params.message.type || "").toLowerCase() === "revoke";
   const { data: inserted, error: insertError } = await supabase
     .from("mensagens")
     .insert({
@@ -161,9 +163,10 @@ async function saveCoexistenceMessage(params: {
       conversa_protocolo_id: params.protocolId || null,
       remetente_tipo: "usuario",
       remetente_id: null,
-      conteudo:
-        String(params.message.conteudo || "").trim() ||
-        "⚠️ Conteúdo enviado pelo WhatsApp Business indisponível.",
+      conteudo: eventoRevogacao
+        ? "Mensagem apagada no WhatsApp Business"
+        : String(params.message.conteudo || "").trim() ||
+          "⚠️ Conteúdo enviado pelo WhatsApp Business indisponível.",
       tipo_mensagem: normalizeCoexistenceMessageType(
         params.message.tipoMensagem
       ),
@@ -180,6 +183,19 @@ async function saveCoexistenceMessage(params: {
         coex_source: "business_app",
         coex_history: false,
         coex_direction: "outbound",
+        ...(eventoRevogacao
+          ? {
+              mensagem_revogada_whatsapp: true,
+              revogada_em: messageAt,
+              revogacao_origem: "business_app",
+              revogacao_mensagem_original_id:
+                (params.message.rawMessage as typeof params.message.rawMessage & {
+                  revoke?: { original_message_id?: string };
+                }).revoke?.original_message_id ||
+                params.message.rawMessage.context?.id ||
+                null,
+            }
+          : {}),
         automacao_processada: true,
         automacao_resultado: {
           ok: true,
@@ -262,6 +278,16 @@ async function processMessageEchoes(body: WhatsAppWebhookBody) {
         "coexistence"
     ) {
       continue;
+    }
+
+    // Excluir no WhatsApp Business altera a mensagem original, quando ela já
+    // está registrada. Não cria um balão duplicado com "conteúdo indisponível".
+    if (String(echo.type || "").toLowerCase() === "revoke") {
+      const resultado = await tratarRevogacaoEcoBusinessApp({
+        empresaId: integration.empresa_id,
+        message: echo.rawMessage,
+      });
+      if (resultado.found) continue;
     }
 
     const contact = await findOrCreateWhatsAppContact({

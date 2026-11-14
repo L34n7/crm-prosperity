@@ -61,3 +61,45 @@ test("ignora metadata malformado sem impedir a conversa", () => {
   assert.equal(state.revoked, false);
   assert.equal(state.currentContent, "Mensagem normal");
 });
+
+test("revoke de eco Business App antigo é exclusão, não indisponibilidade", () => {
+  const state = getWhatsAppMessageSpecialState({
+    conteudo: "⚠️ Conteúdo enviado pelo WhatsApp Business indisponível.",
+    metadata_json: {
+      coex: true,
+      coex_source: "business_app",
+      coex_direction: "outbound",
+      tipo_original_whatsapp: "revoke",
+    },
+  });
+  assert.equal(state.revoked, true);
+  assert.equal(state.deletedContent, null);
+});
+
+test("revoke de mensagem enviada mantém o conteúdo original quando salvo", () => {
+  const state = getWhatsAppMessageSpecialState({
+    conteudo: "Mensagem apagada no WhatsApp Business",
+    metadata_json: {
+      coex_source: "business_app",
+      coex_direction: "outbound",
+      tipo_original_whatsapp: "text",
+      mensagem_revogada_whatsapp: true,
+      revogacao_origem: "business_app",
+      conteudo_antes_revogacao: "Conteúdo enviado originalmente",
+    },
+  });
+  assert.equal(state.revoked, true);
+  assert.equal(state.deletedContent, "Conteúdo enviado originalmente");
+});
+
+test("mensagem indisponível de outro tipo não é confundida com exclusão", () => {
+  const state = getWhatsAppMessageSpecialState({
+    conteudo: "⚠️ Conteúdo enviado pelo WhatsApp Business indisponível.",
+    metadata_json: {
+      coex_source: "business_app",
+      coex_direction: "outbound",
+      tipo_original_whatsapp: "unsupported",
+    },
+  });
+  assert.equal(state.revoked, false);
+});
