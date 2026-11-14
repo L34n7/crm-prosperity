@@ -45,6 +45,27 @@ test("perguntas observadas na venda real consultam a base especializada",()=>{
     assert.equal(consultaFaqProduto(pergunta),pergunta,pergunta);
   }
 });
+test("guia, login e listas frias consultam conhecimento especializado",()=>{
+  const perguntas=[
+    "Onde acesso o CRM?",
+    "Onde faz o acesso?",
+    "Como faço login?",
+    "Qual a URL do CRM?",
+    "Me manda o link de acesso",
+    "Como cadastrar contato?",
+    "Como criar contatos manualmente?",
+    "Como importar contatos CSV?",
+    "Como importar planilha Excel?",
+    "Tenho lista fria, posso disparar?",
+    "O que significa opt-out?",
+    "O cliente respondeu SAIR para não receber disparo",
+    "Como descadastrar contatos dos disparos?",
+    "Por que tem rodapé no template?",
+    "Como funciona o opt-in nos disparos?",
+    "Tem vídeo tutorial para importar lista?",
+  ];
+  for(const p of perguntas) assert.equal(consultaFaqProduto(p),p,p);
+});
 test("saudação simples e continuação curta não exigem pré-consulta",()=>{
   for(const msg of ["Oi","Oii","Bom dia","Pode ser","Sim","Vou avaliar e retorno","Quero conhecer"]) {
     assert.equal(consultaFaqProduto(msg),null,msg);

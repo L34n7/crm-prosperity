@@ -24,6 +24,10 @@ export function consultaFaqProduto(mensagem: string): string | null {
     /\b(?:follow-up|follow up|followup|acompanhamento automatico|fluxos|chatbot|agendamento automatico|google calendar|kanban|funil de vendas|relatorios|email marketing|e-mail marketing|cotacao|orcamento|estoque|odontograma|prontuario)\b/,
     // Variáveis e problemas reais em campanhas/importações (FAQ de disparos).
     /\b(?:variavel|variaveis|csv|planilha de contatos|lista de contatos|disparos personalizados|campo de nome|nome_contato|nome_whatsapp)\b/,
+    // Criar/importar contatos e orientar listas frias e saída de marketing.
+    /\b(?:cadastrar contatos|cadastrar contato|criar contato|novo contato|criar contatos|adicionar contatos|adicionar contato|importar contatos|importar planilha|importacao de contatos|planilha excel|arquivo xlsx|arquivo xls|lista fria|listas frias|base fria|sem opt-in|opt-out|opt out|descadastrar|descadastramento|responda sair|responder sair|parar de receber|rodape de template|saida de mensagens|autorizacao para disparo)\b/,
+    // Pedido geral de login, mesmo quando ainda não mencionou ter pago.
+    /\b(?:onde acesso|onde acessar|onde faco acesso|onde faz o acesso|onde entro|onde eu entro|como entrar no sistema|como entrar no crm|como faco login|como faco pra entrar|como faco para entrar|url de login|url do crm|link de acesso|link do sistema|acessar o crm|acessar o sistema|site para entrar|site pra entrar|quero entrar no sistema|onde fica o login)\b/,
     // Primeiro acesso/pós-compra e rotas corretas de login (nunca cadastro).
     /\b(?:primeiro acesso|ja paguei|ja comprei|ja contratei|finalizei o pagamento|fiz o cadastro|ja fiz login|como faco (?:agora )?(?:pra|para) acessar|como acessar|acessar agora|link do login|criar login|recuperar senha|convite por email|novo usuario)\b/,
     // Demos visuais, migração de parceiro e novos números oficiais.
