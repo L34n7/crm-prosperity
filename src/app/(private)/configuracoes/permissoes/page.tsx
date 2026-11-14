@@ -6,6 +6,7 @@ import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
 import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./permissoes.module.css";
+import { getModuloPermissao, compararModulosPermissoes } from "@/lib/permissoes/grupos-por-modulo";
 
 type ConfiguracaoEmpresa = {
   empresa_id: string;
@@ -92,62 +93,6 @@ const valueToOverride = (value: OverrideValue): boolean | null => {
   if (value === "true") return true;
   if (value === "false") return false;
   return null;
-};
-
-const getGrupoFromCodigo = (codigo: string) => {
-  const prefixo = codigo.split(".")[0] || "outros";
-
-  switch (prefixo) {
-    case "dashboard":
-      return "Painel";
-    case "conversas":
-      return "Conversas";
-    case "mensagens":
-      return "Mensagens";
-    case "contatos":
-      return "Contatos";
-    case "pessoas":
-      return "Clientes e pacientes";
-    case "usuarios":
-      return "Usuarios";
-    case "empresas":
-      return "Empresas";
-    case "setores":
-      return "Setores";
-    case "perfis":
-      return "Perfis";
-    case "permissoes":
-      return "Permissoes";
-    case "whatsapp":
-    case "whatsapp_templates":
-      return "WhatsApp";
-    case "agendas":
-      return "Agendas";
-    case "estoque":
-      return "Estoque";
-    case "rastreamento":
-      return "Rastreamento de leads";
-    case "prontuarios":
-      return "Prontuários";
-    case "odontograma":
-      return "Odontograma";
-    case "imoveis":
-      return "Imóveis";
-    case "fluxos":
-      return "Fluxos";
-    case "kanban":
-      return "Kanban";
-    case "automacoes_api":
-      return "Automações por API";
-    case "ia":
-      return "Tokens de IA";
-    case "auditoria":
-      return "Auditoria";
-    case "email_marketing":
-      return "E-mail Marketing";
-    default:
-      return "Outros";
-  }
 };
 
 function CardBoolean({
@@ -362,16 +307,20 @@ export default function PermissoesPage() {
     const map = new Map<string, PermissaoCatalogo[]>();
 
     for (const permissao of permissoesCatalogo) {
-      const grupo = getGrupoFromCodigo(permissao.codigo);
+      const grupo = getModuloPermissao(permissao.codigo);
       const lista = map.get(grupo) || [];
       lista.push(permissao);
       map.set(grupo, lista);
     }
 
-    return Array.from(map.entries()).map(([grupo, itens]) => ({
-      grupo,
-      itens: itens.sort((a, b) => a.codigo.localeCompare(b.codigo)),
-    }));
+    return Array.from(map.entries())
+      .map(([grupo, itens]) => ({
+        grupo,
+        itens: [...itens].sort((a, b) =>
+          (a.descricao || a.codigo).localeCompare(b.descricao || b.codigo, "pt-BR")
+        ),
+      }))
+      .sort((a, b) => compararModulosPermissoes(a.grupo, b.grupo));
   }, [permissoesCatalogo]);
 
   async function salvarEmpresa() {

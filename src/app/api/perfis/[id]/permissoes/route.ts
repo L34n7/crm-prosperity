@@ -9,6 +9,7 @@ import {
 import { empresaManteraAdminGerenciador } from "@/lib/permissoes/garantir-admin-gerenciador";
 import { isPermissaoOcultaNaTela } from "@/lib/permissoes/internas";
 import { invalidarCachePermissoesPerfis } from "@/lib/permissoes/can";
+import { getModuloPermissao } from "@/lib/permissoes/grupos-por-modulo";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -20,31 +21,6 @@ type PermissaoCatalogoRow = {
 type PerfilPermissaoRow = {
   permissao_codigo: string;
 };
-
-function getGrupoFromCodigo(codigo: string) {
-  const prefixo = codigo.split(".")[0] || "outros";
-
-  switch (prefixo) {
-    case "conversas":
-      return "Conversas";
-    case "mensagens":
-      return "Mensagens";
-    case "usuarios":
-      return "Usuários";
-    case "setores":
-      return "Setores";
-    case "perfis":
-      return "Perfis";
-    case "relatorios":
-      return "Relatórios";
-    case "email_marketing":
-      return "E-mail Marketing";
-    case "sistema":
-      return "Sistema";
-    default:
-      return "Outros";
-  }
-}
 
 export async function GET(
   _request: Request,
@@ -134,7 +110,7 @@ export async function GET(
       .map((item) => ({
         codigo: item.codigo,
         descricao: item.descricao,
-        grupo: getGrupoFromCodigo(item.codigo),
+        grupo: getModuloPermissao(item.codigo),
         marcada:
           perfil.nome?.trim().toLocaleLowerCase("pt-BR") === "administrador" ||
           marcadas.has(item.codigo),

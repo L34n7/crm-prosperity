@@ -10,6 +10,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import FeedbackToast from "@/components/FeedbackToast";
+import { getModuloPermissao, compararModulosPermissoes } from "@/lib/permissoes/grupos-por-modulo";
 import styles from "./permissoes.module.css";
 
 type PermissaoItem = {
@@ -31,29 +32,6 @@ type ApiResponse = {
   perfil: PerfilInfo;
   permissoes: PermissaoItem[];
 };
-
-function getGrupoFromCodigo(codigo: string) {
-  const prefixo = codigo.split(".")[0] || "outros";
-
-  switch (prefixo) {
-    case "conversas":
-      return "Conversas";
-    case "mensagens":
-      return "Mensagens";
-    case "usuarios":
-      return "Usuários";
-    case "setores":
-      return "Setores";
-    case "perfis":
-      return "Perfis";
-    case "relatorios":
-      return "Relatórios";
-    case "sistema":
-      return "Sistema";
-    default:
-      return "Outros";
-  }
-}
 
 function normalizarBusca(valor: string) {
   return valor
@@ -111,7 +89,7 @@ export default function PermissoesDoPerfilPage({
 
       const permissoesFormatadas = (data.permissoes || []).map((item) => ({
         ...item,
-        grupo: item.grupo || getGrupoFromCodigo(item.codigo),
+        grupo: getModuloPermissao(item.codigo),
       }));
 
       const modulos = Array.from(
@@ -153,7 +131,7 @@ export default function PermissoesDoPerfilPage({
           )
         ),
       }))
-      .sort((a, b) => a.grupo.localeCompare(b.grupo, "pt-BR"));
+      .sort((a, b) => compararModulosPermissoes(a.grupo, b.grupo));
   }, [permissoes]);
 
   const termoBusca = normalizarBusca(busca);
