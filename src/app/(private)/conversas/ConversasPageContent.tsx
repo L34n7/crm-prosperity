@@ -8868,8 +8868,8 @@ const templateFooterTexto = useMemo(() => {
                                                 </p>
                                                 <span className={styles.deletedBadge}>
                                                   {msg.remetente_tipo === "usuario" &&
-                                                  (getMensagemMetadataDisparo(msg).revogacao_origem === "business_app" ||
-                                                   getMensagemMetadataDisparo(msg).coex_source === "business_app")
+                                                  ((msg.metadata_json as Record<string, unknown> | null)?.revogacao_origem === "business_app" ||
+                                                   (msg.metadata_json as Record<string, unknown> | null)?.coex_source === "business_app")
                                                     ? "Apagada no WhatsApp Business"
                                                     : "Apagada pelo contato"}
                                                 </span>
