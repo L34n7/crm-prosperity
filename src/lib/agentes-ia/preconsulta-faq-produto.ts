@@ -25,7 +25,7 @@ export function consultaFaqProduto(mensagem: string): string | null {
     // Variáveis e problemas reais em campanhas/importações (FAQ de disparos).
     /\b(?:variavel|variaveis|csv|planilha de contatos|lista de contatos|disparos personalizados|campo de nome|nome_contato|nome_whatsapp)\b/,
     // Primeiro acesso/pós-compra e rotas corretas de login (nunca cadastro).
-    /\b(?:primeiro acesso|ja paguei|ja comprei|ja contratei|finalizei o pagamento|fiz o cadastro|ja fiz login|como faco para acessar|como acessar|acessar agora|link do login|criar login|recuperar senha|convite por email|novo usuario)\b/,
+    /\b(?:primeiro acesso|ja paguei|ja comprei|ja contratei|finalizei o pagamento|fiz o cadastro|ja fiz login|como faco (?:agora )?(?:pra|para) acessar|como acessar|acessar agora|link do login|criar login|recuperar senha|convite por email|novo usuario)\b/,
     // Demos visuais, migração de parceiro e novos números oficiais.
     /\b(?:me mostra a tela|tem uma tela|quero ver funcionando|quero ver a tela|video demonstrativo|video do sistema|demonstracao em video|parceiro anterior|outro provedor|outra bm|bm diferente|novo numero|mais um numero|quatro numeros|4 numeros)\b/,
     // Assinatura, integrações, confiança e parceiros.
