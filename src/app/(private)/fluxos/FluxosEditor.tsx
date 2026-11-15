@@ -11,6 +11,8 @@ import {
 } from "@xyflow/react";
 import FeedbackToast from "@/components/FeedbackToast";
 import Header from "@/components/Header";
+import GuiaModulo from "@/components/GuiaModulo";
+import { GUIA_FLUXOS } from "@/lib/central-de-conhecimento/guias";
 import AssistenteFluxosPanel, {
   type AssistenteFluxosFluxoCriado,
 } from "./AssistenteFluxosPanel";
@@ -714,6 +716,7 @@ function FluxosPageContent() {
     });
   }, [nodes]);
   const [assistenteFluxosAberto, setAssistenteFluxosAberto] = useState(false);
+  const [ajudaFluxosAberta, setAjudaFluxosAberta] = useState(false);
   const [previaWhatsappRecolhida, setPreviaWhatsappRecolhida] =
     useState(false);
   const [respostasPreviaWhatsapp, setRespostasPreviaWhatsapp] = useState<
@@ -4874,6 +4877,22 @@ function abrirTooltipAlertaFluxo(elemento: HTMLElement) {
         mobileBackLabel="Voltar para fluxos"
         title="Fluxos de automação"
         subtitle="Monte fluxos para automatizar atendimentos, direcionar clientes e escalar suas conversas no WhatsApp."
+      />
+      <GuiaModulo
+        guia={GUIA_FLUXOS}
+        aberto={ajudaFluxosAberta}
+        onAbertoChange={setAjudaFluxosAberta}
+        etapaAtual={
+          abrirCriacao || assistenteFluxosAberto || modalImportarAberto
+            ? 1
+            : editandoFluxo
+              ? 2
+              : nodeEditado || edgeEditada
+                ? 3
+                : fluxoSelecionado
+                  ? 3
+                  : null
+        }
       />
     <main
       className={`${styles.pageContent} ${

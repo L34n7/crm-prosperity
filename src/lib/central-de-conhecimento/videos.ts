@@ -14,6 +14,7 @@ export type ModuloTutorial =
   | "configurar-ambiente"
   | "disparos"
   | "templates"
+  | "fluxos"
   | "contatos"
   | "perfil-whatsapp";
 
@@ -54,6 +55,7 @@ export const VIDEOS_TUTORIAIS: Record<ModuloTutorial, readonly VideoTutorial[]> 
       descricao: "Tutorial para criar modelos de mensagens WhatsApp no CRM Prosperity.",
     },
   ],
+  fluxos: [],
   contatos: [
     {
       id: "7JLRauFK2TU",
