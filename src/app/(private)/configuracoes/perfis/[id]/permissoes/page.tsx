@@ -56,6 +56,7 @@ export default function PermissoesDoPerfilPage({
   const [perfil, setPerfil] = useState<PerfilInfo | null>(null);
   const [permissoes, setPermissoes] = useState<PermissaoItem[]>([]);
   const [gruposAbertos, setGruposAbertos] = useState<Set<string>>(new Set());
+  const [moduloNavegacao, setModuloNavegacao] = useState("");
   const [busca, setBusca] = useState("");
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -98,7 +99,11 @@ export default function PermissoesDoPerfilPage({
 
       setPerfil(data.perfil);
       setPermissoes(permissoesFormatadas);
-      setGruposAbertos(new Set(modulos));
+      setGruposAbertos(
+        typeof window !== "undefined" && window.matchMedia("(max-width: 620px)").matches
+          ? new Set()
+          : new Set(modulos)
+      );
     } catch {
       setErro("Erro ao carregar permissões do perfil");
     } finally {
@@ -199,6 +204,7 @@ export default function PermissoesDoPerfilPage({
   }
 
   function irParaModulo(grupo: string) {
+    setModuloNavegacao(grupo);
     setBusca("");
     setGruposAbertos((atual) => new Set(atual).add(grupo));
 
@@ -444,6 +450,27 @@ export default function PermissoesDoPerfilPage({
             <div className={styles.summaryCard}>
               <p className={styles.summaryTitle}>Módulos</p>
 
+              <div className={styles.summaryPickerWrap}>
+                <label className={styles.summaryPickerLabel} htmlFor="permissoes-modulo-mobile">
+                  Ir para um módulo
+                </label>
+                <select
+                  id="permissoes-modulo-mobile"
+                  className={styles.summaryPicker}
+                  value={moduloNavegacao}
+                  onChange={(event) => {
+                    if (event.target.value) irParaModulo(event.target.value);
+                  }}
+                >
+                  <option value="">Selecione o módulo...</option>
+                  {grupos.map(({ grupo, itens }) => (
+                    <option key={grupo} value={grupo}>
+                      {grupo} ({itens.filter((item) => item.marcada).length}/{itens.length})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <nav className={styles.summaryNav} aria-label="Sumário de módulos">
                 {grupos.map(({ grupo, itens }) => {
                   const marcadas = itens.filter((item) => item.marcada).length;
@@ -466,6 +493,17 @@ export default function PermissoesDoPerfilPage({
             </div>
           </aside>
         </div>
+      </div>
+
+      <div className={styles.mobileSaveBar}>
+        <button
+          type="button"
+          className={styles.primaryButton}
+          onClick={salvarPermissoes}
+          disabled={salvando}
+        >
+          {salvando ? "Salvando..." : "Salvar permissões"}
+        </button>
       </div>
     </main>
   );

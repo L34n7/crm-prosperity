@@ -1,10 +1,17 @@
 .page {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 100vh;
   background: var(--crm-surface-soft);
   padding: 22px 24px 40px;
 }
 
 .shell {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
   width: min(100%, 1420px);
   margin: 0 auto;
   display: grid;
@@ -12,6 +19,9 @@
 }
 
 .pageHeader {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -151,6 +161,9 @@
 }
 
 .searchPanel {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -221,6 +234,9 @@
 }
 
 .contentGrid {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 210px;
   gap: 18px;
@@ -229,6 +245,7 @@
 
 .modulesColumn {
   min-width: 0;
+  width: 100%;
   display: grid;
   gap: 12px;
 }
@@ -468,6 +485,11 @@
   gap: 2px;
 }
 
+.summaryPickerWrap,
+.mobileSaveBar {
+  display: none;
+}
+
 .summaryLink {
   width: 100%;
   min-width: 0;
@@ -582,6 +604,7 @@
 
   .summaryAside {
     width: 100%;
+    min-width: 0;
     order: -1;
   }
 
@@ -610,10 +633,91 @@
 
 @media (max-width: 620px) {
   .page {
-    padding:
-      10px
-      10px
-      calc(94px + env(safe-area-inset-bottom));
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: clip;
+    padding: 10px 10px calc(175px + env(safe-area-inset-bottom));
+  }
+
+  .shell,
+  .pageHeader,
+  .headerContent,
+  .titleRow,
+  .searchPanel,
+  .contentGrid,
+  .summaryAside,
+  .summaryCard,
+  .modulesColumn {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .contentGrid {
+    align-items: stretch;
+  }
+
+  .pageHeader .primaryButton {
+    display: none;
+  }
+
+  .mobileSaveBar {
+    position: fixed;
+    z-index: 40;
+    display: block;
+    left: max(10px, env(safe-area-inset-left));
+    right: max(10px, env(safe-area-inset-right));
+    bottom: calc(74px + env(safe-area-inset-bottom));
+    padding: 8px;
+    border: 1px solid var(--crm-border);
+    border-radius: 15px;
+    background: var(--crm-surface);
+    box-shadow: 0 8px 32px var(--crm-ui-private-shadow-rgb-15-23-42-0-18);
+  }
+
+  .mobileSaveBar .primaryButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 46px;
+    white-space: nowrap;
+  }
+
+  .summaryNav {
+    display: none;
+  }
+
+  .summaryPickerWrap {
+    display: grid;
+    gap: 6px;
+  }
+
+  .summaryPickerLabel {
+    color: var(--crm-text-muted);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .summaryPicker {
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    min-width: 0;
+    height: 45px;
+    padding: 0 12px;
+    border: 1px solid var(--crm-border);
+    border-radius: 10px;
+    background: var(--crm-surface-subtle);
+    color: var(--crm-text-strong);
+    font: inherit;
+    font-size: 14px;
+  }
+
+  .summaryPicker:focus-visible {
+    outline: 2px solid var(--crm-primary);
+    outline-offset: 2px;
   }
 
   .shell {
@@ -627,9 +731,19 @@
   }
 
   .titleRow {
-    align-items: flex-start;
+    align-items: stretch;
     flex-direction: column;
     gap: 12px;
+  }
+
+  .titleRow > div:first-child {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .title,
+  .subtitle {
+    overflow-wrap: anywhere;
   }
 
   .title {
@@ -646,13 +760,39 @@
   }
 
   .profileBadge strong {
-    max-width: calc(100vw - 110px);
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .profileBadge > span:last-child {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .profileIcon {
+    flex: 0 0 30px;
   }
 
   .searchPanel {
     gap: 10px;
     padding: 11px;
     border-radius: 14px;
+  }
+
+  .searchBox {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .searchBox input {
+    font-size: 16px;
+  }
+
+  .searchMeta {
+    flex-wrap: wrap;
+    gap: 6px;
+    white-space: normal;
   }
 
   .searchMeta {
@@ -664,6 +804,9 @@
   }
 
   .moduleHeader {
+    box-sizing: border-box;
+    min-width: 0;
+    width: 100%;
     min-height: 62px;
     align-items: stretch;
     flex-direction: column;
