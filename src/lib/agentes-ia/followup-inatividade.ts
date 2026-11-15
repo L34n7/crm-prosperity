@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { textoFollowupUnicoSeguro } from "./resposta-estruturada";
+import { garantirFollowupCurtoLeonardo } from "./followup-curto-leonardo";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { mensagemPermiteAcompanhamento, contatoPediuPausaExplicita } from "./followup-ciclo";
 import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
@@ -1118,6 +1119,9 @@ export async function processarFollowupAgenteIa(agendamento: {
       "FOLLOW-UP DE INATIVIDADE:",
       "- O cliente parou de responder e a janela de 24 horas ainda está aberta.",
       "- Escreva UMA única mensagem curta e natural para retomar exatamente o ponto pendente.",
+      agenteId === "512da872-07df-49b6-87fe-dfec84c271c6"
+        ? "- PRIORIDADE DE TAMANHO PARA LEONARDO: follow-up sempre em UM balão, com UMA ideia comercial principal e uma pergunta simples. PREFERIR 100 a 180 caracteres; MÁXIMO 230 caracteres. Evite lista de benefícios, longas explicações e parágrafos. Se houver URL de checkout, preserve-a por inteiro. Esta regra tem prioridade mesmo se a instrução personalizada pedir muitos argumentos."
+        : "",
       "- REGRA DE FORMATO DO FOLLOW-UP: responda APENAS o texto final, sem prefixo mensagens:, arrays, JSON ou memoria_delta. Não aplique aqui a apresentação em dois balões da abertura inicial e não se apresente novamente.",
       `- Esta é a tentativa ${tentativa}. ${estrategiaTentativaFollowup(tentativa)}`,
       tentativa > 1
@@ -1211,6 +1215,14 @@ export async function processarFollowupAgenteIa(agendamento: {
             "Só confirmando para não deixar nada errado: você quer seguir com o horário que combinamos?";
         }
       }
+
+      // Limite defensivo apenas para o agente Leonardo. Evita balão extenso
+      // se o modelo não respeitar a orientação; outros agentes ficam intactos.
+      texto = garantirFollowupCurtoLeonardo({
+        agenteId,
+        texto,
+        alternativa: followupFallbackSeguro(proximaAcao, tentativa),
+      });
 
       tokensInput = Number(response.usage?.input_tokens || 0);
       tokensOutput = Number(response.usage?.output_tokens || 0);
