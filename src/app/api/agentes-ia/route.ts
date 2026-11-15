@@ -15,6 +15,7 @@ import {
 } from "@/lib/agentes-ia/followup-config";
 import { listarGruposDistribuicao } from "@/lib/agendas/capacidade";
 import { DELAY_DINAMICO_PADRAO, normalizarDelayDinamico } from "@/lib/agentes-ia/delay-dinamico";
+import { TAMANHO_MENSAGENS_PADRAO, normalizarTamanhoMensagens } from "@/lib/agentes-ia/tamanho-mensagens";
 import { obterGrupoDistribuicao } from "@/lib/agendas/distribuicao";
 
 const supabaseAdmin = getSupabaseAdmin();
@@ -791,6 +792,7 @@ export async function POST(request: Request) {
         integracoes_whatsapp_ids: [],
         metadata_json: {
           delay_dinamico: { ...DELAY_DINAMICO_PADRAO },
+          tamanho_mensagens: TAMANHO_MENSAGENS_PADRAO,
           followup_inatividade: {
             ...FOLLOWUP_INATIVIDADE_PADRAO,
             intervalos_minutos: [...FOLLOWUP_INATIVIDADE_PADRAO.intervalos_minutos],
@@ -1225,6 +1227,7 @@ export async function PATCH(request: Request) {
       body.followup_inatividade ?? metadataAtual.followup_inatividade
     );
     const delayDinamico = normalizarDelayDinamico(body.delay_dinamico ?? metadataAtual.delay_dinamico);
+    const tamanhoMensagens = normalizarTamanhoMensagens(body.tamanho_mensagens ?? metadataAtual.tamanho_mensagens);
     const erroFollowup = erroValidacaoFollowupInatividade(followupInatividade);
     if (erroFollowup) {
       return NextResponse.json(
@@ -1292,6 +1295,7 @@ export async function PATCH(request: Request) {
         ...metadataAtual,
         followup_inatividade: followupInatividade,
         delay_dinamico: delayDinamico,
+        tamanho_mensagens: tamanhoMensagens,
       },
       updated_by: contexto.usuario.id,
       updated_at: new Date().toISOString(),

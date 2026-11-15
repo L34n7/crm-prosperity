@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { textoFollowupUnicoSeguro } from "./resposta-estruturada";
-import { garantirFollowupCurtoLeonardo } from "./followup-curto-leonardo";
+import { ajustarFollowupGerado, instrucaoTamanhoMensagens } from "./tamanho-mensagens";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { mensagemPermiteAcompanhamento, contatoPediuPausaExplicita } from "./followup-ciclo";
 import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
@@ -518,7 +518,7 @@ function historicoParaModelo(mensagens: Array<Record<string, unknown>>) {
 }
 
 function textoFollowupSeguro(valor: unknown) {
-  return textoFollowupUnicoSeguro(valor,700)
+  return textoFollowupUnicoSeguro(valor,900)
     .replace(/^\s*🎤\s*áudio\s*/i, "")
     .trim();
 }
@@ -1118,10 +1118,7 @@ export async function processarFollowupAgenteIa(agendamento: {
       agente.instrucoes ? `Instruções: ${agente.instrucoes}` : "",
       "FOLLOW-UP DE INATIVIDADE:",
       "- O cliente parou de responder e a janela de 24 horas ainda está aberta.",
-      "- Escreva UMA única mensagem curta e natural para retomar exatamente o ponto pendente.",
-      agenteId === "512da872-07df-49b6-87fe-dfec84c271c6"
-        ? "- PRIORIDADE DE TAMANHO PARA LEONARDO: follow-up sempre em UM balão, com UMA ideia comercial principal e uma pergunta simples. PREFERIR 100 a 180 caracteres; MÁXIMO 230 caracteres. Evite lista de benefícios, longas explicações e parágrafos. Se houver URL de checkout, preserve-a por inteiro. Esta regra tem prioridade mesmo se a instrução personalizada pedir muitos argumentos."
-        : "",
+      "- Escreva UMA única mensagem natural para retomar exatamente o ponto pendente, respeitando o tamanho configurado no agente.",
       "- REGRA DE FORMATO DO FOLLOW-UP: responda APENAS o texto final, sem prefixo mensagens:, arrays, JSON ou memoria_delta. Não aplique aqui a apresentação em dois balões da abertura inicial e não se apresente novamente.",
       `- Esta é a tentativa ${tentativa}. ${estrategiaTentativaFollowup(tentativa)}`,
       tentativa > 1
@@ -1144,6 +1141,7 @@ export async function processarFollowupAgenteIa(agendamento: {
       "- Não invente preço, disponibilidade, confirmação, ação executada ou informação que dependa de ferramenta.",
       "- REGRA CRÍTICA DE AGENDA NO FOLLOW-UP: este gerador NÃO consulta a agenda. Se o ponto pendente for demonstração, reunião ou agendamento, NUNCA cite data, dia da semana, horário, vaga, opção ou \"horários disponíveis\". Faça apenas uma pergunta curta para retomar; a disponibilidade real só pode ser apresentada depois de uma consulta de agenda no atendimento normal.",
       instrucaoPersonalizadaFollowup(etapa, tentativa),
+      instrucaoTamanhoMensagens(agente.metadata_json?.tamanho_mensagens, true),
       `- Ponto pendente: ${proximaAcao}`,
       estadoRow?.resumo ? `- Contexto resumido: ${String(estadoRow.resumo).slice(0, 1200)}` : "",
     ].filter(Boolean).join("\n\n");
@@ -1216,13 +1214,13 @@ export async function processarFollowupAgenteIa(agendamento: {
         }
       }
 
-      // Limite defensivo apenas para o agente Leonardo. Evita balão extenso
-      // se o modelo não respeitar a orientação; outros agentes ficam intactos.
-      texto = garantirFollowupCurtoLeonardo({
-        agenteId,
+      // Aplicação geral por agente; vale somente para follow-up GERADO
+      // pela IA. Mensagens fixas e áudios configurados não são modificados.
+      texto = ajustarFollowupGerado(
         texto,
-        alternativa: followupFallbackSeguro(proximaAcao, tentativa),
-      });
+        agente.metadata_json?.tamanho_mensagens,
+        followupFallbackSeguro(proximaAcao, tentativa),
+      );
 
       tokensInput = Number(response.usage?.input_tokens || 0);
       tokensOutput = Number(response.usage?.output_tokens || 0);

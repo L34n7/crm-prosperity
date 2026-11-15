@@ -36,6 +36,7 @@ import TipoAgendamentoFerramentaSelect from "./components/TipoAgendamentoFerrame
 import FollowupInatividadeEditor from "./components/FollowupInatividadeEditor";
 import DelayDinamicoEditor from "./components/DelayDinamicoEditor";
 import { normalizarDelayDinamico } from "@/lib/agentes-ia/delay-dinamico";
+import { OPCOES_TAMANHO_MENSAGENS, normalizarTamanhoMensagens } from "@/lib/agentes-ia/tamanho-mensagens";
 import CotacaoPosCotacaoEditor from "./components/CotacaoPosCotacaoEditor";
 import CotacaoPlanosFerramentaEditor from "./components/CotacaoPlanosFerramentaEditor";
 import {
@@ -407,6 +408,7 @@ function normalizarAgente(
     ...metadata,
     followup_inatividade: normalizarFollowupInatividade(metadata.followup_inatividade),
     delay_dinamico: normalizarDelayDinamico(metadata.delay_dinamico),
+    tamanho_mensagens: normalizarTamanhoMensagens(metadata.tamanho_mensagens),
   };
   clone.fallback_tipo = ["fluxo", "transferir_humano", "nenhum"].includes(
     clone.fallback_tipo
@@ -948,6 +950,7 @@ export default function AgentesIaPage() {
           instrucoes: editor.instrucoes,
           max_mensagens_contexto: editor.max_mensagens_contexto,
           debounce_ms: editor.debounce_ms,
+          tamanho_mensagens: normalizarTamanhoMensagens(editor.metadata_json?.tamanho_mensagens),
           delay_dinamico: delayDinamico,
           followup_inatividade: followupInatividade,
           modo_atendimento: editor.modo_atendimento,
@@ -1578,6 +1581,31 @@ export default function AgentesIaPage() {
                         />
                         <small className={styles.fieldHint}>
                           Não entra no contexto da IA. Apenas define quanto tempo o sistema espera para agrupar mensagens próximas antes de processar.
+                        </small>
+                      </label>
+                      <label className={styles.field}>
+                        <span>Tamanho das mensagens</span>
+                        <select
+                          value={normalizarTamanhoMensagens(editor.metadata_json?.tamanho_mensagens)}
+                          onChange={(event) =>
+                            setEditor({
+                              ...editor,
+                              metadata_json: {
+                                ...(editor.metadata_json || {}),
+                                tamanho_mensagens: normalizarTamanhoMensagens(event.target.value),
+                              },
+                            })
+                          }
+                        >
+                          {OPCOES_TAMANHO_MENSAGENS.map((opcao) => (
+                            <option key={opcao.valor} value={opcao.valor}>
+                              {opcao.rotulo} ({opcao.minimo}–{opcao.maximo} caracteres)
+                            </option>
+                          ))}
+                        </select>
+                        <small className={styles.fieldHint}>
+                          Faixa de referência por balão de conversa e follow-up da IA.
+                          Textos fixos e saídas de ferramentas, como cotação veicular, não são reduzidos.
                         </small>
                       </label>
                     </div>

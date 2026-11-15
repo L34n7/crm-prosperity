@@ -17,6 +17,7 @@ import {desejaContratarCotacao,escolheuPlanoDaCotacao,indicouEscolhaPlanoCotacao
 import { classificarFalhaCotacao, contemDetalheInternoCotacao, respostaSeguraFalhaCotacao } from "./cotacao-erros-publicos";
 import { respostaTrazDistincaoFipe, perguntaUnicaVersoesFipe, interpretarRespostaOpcoesFipe } from "@/lib/cotacoes-veiculares/orientacao-versoes";
 import {recuperarRespostaEstruturada,textoPareceEstruturaInterna,textoWhatsappComQuebras,protegerMensagensSaida} from "./resposta-estruturada";
+import { ajustarBaloesGerados, instrucaoTamanhoMensagens } from "./tamanho-mensagens";
 import {modeloSugeridoConfirmadoCotacao} from "./modelo-sugerido-cotacao";
 import {clienteRejeitouVersoesFipe,novoModeloForaDaLista} from "./reorientacao-versoes-cotacao";
 import {querCompararPlanos,usoComparativoNoContexto,citouVeiculoDiferente} from "./comparacao-intencao";
@@ -733,6 +734,7 @@ function instrucoesAgente(
     "- Não prometa consultar, vender ou verificar depois. Execute a ferramenta no mesmo turno ou peça objetivamente o dado que falta.",
     `Memória: ${memoriaCompacta(estado) || "sem fatos relevantes"}`,
     "Em memoria_delta registre apenas novidades reais. Interesses e preferências explícitos do cliente devem entrar em interesses; o CRM cuidará da persistência quando essa capacidade estiver habilitada.",
+    instrucaoTamanhoMensagens(agente.metadata_json?.tamanho_mensagens),
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -2025,7 +2027,17 @@ export async function processarPendenciaNegocio(
           });
           continue;
         } else {
-          saidaFinal=respostaInterpretada;
+          // Ajustar somente a fala livre do modelo; retornos de ferramentas,
+          // cotação completa e respostas montadas pelo backend ficam intactos.
+          saidaFinal = {
+            ...respostaInterpretada,
+            mensagens: ctx.ferramentasExecutadas.length
+              ? respostaInterpretada.mensagens
+              : ajustarBaloesGerados(
+                  respostaInterpretada.mensagens,
+                  agente.metadata_json?.tamanho_mensagens,
+                ),
+          };
         }
         break;
       }

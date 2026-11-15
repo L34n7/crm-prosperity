@@ -41,6 +41,7 @@ import { processAutomationEngine as processAutomationEngineFluxos } from "@/lib/
 import type { AutomationEngineInput } from "@/lib/automacoes/types";
 import { conteudoMensagemComInterpretacaoImagem } from "./interpretacao-imagem";
 import {recuperarRespostaEstruturada,textoPareceEstruturaInterna,protegerMensagensSaida} from "./resposta-estruturada";
+import { ajustarBaloesGerados, instrucaoTamanhoMensagens } from "./tamanho-mensagens";
 import { consultaFaqProduto } from "./preconsulta-faq-produto";
 import { protegerRespostaPosCompraProsperity } from "./protecao-poscompra-prosperity";
 import {regrasGeraisBackend,regrasPorFerramentaGeral} from "./prompts-backend";
@@ -3621,6 +3622,7 @@ function promptDoAgente(
     `Agenda: ${agendaInfo}`,
     "ESTADO OPERACIONAL DA AGENDA:",
     estadoOperacionalAgenda,
+    instrucaoTamanhoMensagens(agente.metadata_json?.tamanho_mensagens),
   ].filter(Boolean).join("\n\n");
 }
 
@@ -4297,6 +4299,13 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
       }
       if(!saidaFinal.mensagens.length){
         saidaFinal.mensagens=["Não consegui preparar minha resposta. Pode repetir a última pergunta?"];
+      }
+      // Apenas balões livres da IA; saídas de ferramentas e textos fixos
+      // continuam com o conteúdo integral, sem edição ou truncamento.
+      if (!ctx.respostaDeterministica?.length && !ctx.ferramentasExecutadas.length) {
+        saidaFinal.mensagens = ajustarBaloesGerados(
+          saidaFinal.mensagens, agente.metadata_json?.tamanho_mensagens, MAX_MENSAGENS_SAIDA,
+        );
       }
       const resultadoEnvio = await enviarMensagensAgente(ctx, saidaFinal.mensagens);
       if (resultadoEnvio.supersedido) {
