@@ -1,13 +1,13 @@
 /**
- * Faixas orientativas por balão gerado pela IA; textos fixos e conteúdo
- * de ferramentas não devem passar pelo ajuste de tamanho.
+ * Tetos por balão gerado pela IA, sem tamanho mínimo. Textos fixos e
+ * conteúdo de ferramentas não devem passar pelo ajuste de tamanho.
  */
 export const OPCOES_TAMANHO_MENSAGENS = [
-  { valor: "curta", rotulo: "Mensagens curtas", minimo: 40, maximo: 150 },
-  { valor: "media_curta", rotulo: "Mensagens médias curtas", minimo: 100, maximo: 250 },
-  { valor: "media", rotulo: "Mensagens médias", minimo: 180, maximo: 400 },
-  { valor: "media_longa", rotulo: "Mensagens médias longas", minimo: 300, maximo: 600 },
-  { valor: "longa", rotulo: "Mensagens longas", minimo: 500, maximo: 900 },
+  { valor: "curta", rotulo: "Mensagens curtas", maximo: 150 },
+  { valor: "media_curta", rotulo: "Mensagens médias curtas", maximo: 250 },
+  { valor: "media", rotulo: "Mensagens médias", maximo: 400 },
+  { valor: "media_longa", rotulo: "Mensagens médias longas", maximo: 600 },
+  { valor: "longa", rotulo: "Mensagens longas", maximo: 900 },
 ] as const;
 
 export type TamanhoMensagens = (typeof OPCOES_TAMANHO_MENSAGENS)[number]["valor"];
@@ -28,12 +28,12 @@ export function instrucaoTamanhoMensagens(valor: unknown, followup = false): str
   const faixa = faixaTamanhoMensagens(valor);
   return [
     "CONFIGURAÇÃO DO EDITOR DO AGENTE — TAMANHO DAS MENSAGENS (PRIORIDADE SOBRE REGRAS DE TAMANHO DO PROMPT PERSONALIZADO):",
-    "Opção: " + faixa.rotulo + "; faixa de referência de " + faixa.minimo + " a " + faixa.maximo + " caracteres POR BALÃO.",
-    "O mínimo é apenas referência: responda em menos caracteres se isso for suficiente. Evite prolixidade e repetição.",
+    "Opção: " + faixa.rotulo + "; TETO de até " + faixa.maximo + " caracteres POR BALÃO, sem mínimo.",
+    "O teto é o MÁXIMO, não o tamanho esperado. Perguntas simples devem receber respostas simples e naturalmente curtas, mesmo com o teto configurado em 900 caracteres. Evite prolixidade e repetição.",
     followup
       ? "FOLLOW-UP GERADO PELA IA: escreva UM ÚNICO balão natural e contextual, preferencialmente dentro do máximo escolhido. Foque em uma ideia relevante e um próximo passo."
       : "CONVERSA: responda com 1 a 3 balões independentes no array mensagens conforme a necessidade, respeitando de preferência o máximo por balão. Uma dúvida simples pode caber em um único balão.",
-    "Não quebre frases ao meio. Em uma explicação complexa, seja completo, preservando os fatos necessários; não acrescente conteúdo apenas para atingir um mínimo.",
+    "Não quebre frases ao meio. Em uma explicação complexa, preserve todos os fatos necessários; não alongue respostas para preencher o teto.",
     "EXCEÇÕES: mantenha sem redução os textos fixos configurados e o conteúdo integral de ferramentas (cotação veicular completa, valores, listas técnicas, consultas e demais documentos gerados), sem jamais truncar URLs ou informações essenciais.",
   ].join("\n");
 }

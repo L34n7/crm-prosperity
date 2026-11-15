@@ -1584,7 +1584,7 @@ export default function AgentesIaPage() {
                         </small>
                       </label>
                       <label className={styles.field}>
-                        <span>Tamanho das mensagens</span>
+                        <span>Tamanho máximo das mensagens</span>
                         <select
                           value={normalizarTamanhoMensagens(editor.metadata_json?.tamanho_mensagens)}
                           onChange={(event) =>
@@ -1599,13 +1599,13 @@ export default function AgentesIaPage() {
                         >
                           {OPCOES_TAMANHO_MENSAGENS.map((opcao) => (
                             <option key={opcao.valor} value={opcao.valor}>
-                              {opcao.rotulo} ({opcao.minimo}–{opcao.maximo} caracteres)
+                              {opcao.rotulo} (até {opcao.maximo} caracteres)
                             </option>
                           ))}
                         </select>
                         <small className={styles.fieldHint}>
-                          Faixa de referência por balão de conversa e follow-up da IA.
-                          Textos fixos e saídas de ferramentas, como cotação veicular, não são reduzidos.
+                          Teto máximo por balão gerado pela IA, sem mínimo obrigatório.
+                          Respostas simples continuam curtas. Textos fixos e resultados de ferramentas, como cotação veicular, não são reduzidos.
                         </small>
                       </label>
                     </div>

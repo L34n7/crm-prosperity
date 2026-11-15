@@ -9,27 +9,30 @@ import {
   ajustarFollowupGerado,
 } from "../src/lib/agentes-ia/tamanho-mensagens.ts";
 
-test("cinco faixas em ordem e valor legado usa média", () => {
+test("cinco tetos em ordem e valor legado usa média", () => {
   assert.deepEqual(OPCOES_TAMANHO_MENSAGENS.map((opcao) => opcao.valor), [
     "curta", "media_curta", "media", "media_longa", "longa",
   ]);
   assert.equal(normalizarTamanhoMensagens(null), "media");
   assert.equal(normalizarTamanhoMensagens("nao_existe"), "media");
   assert.equal(faixaTamanhoMensagens("longa").maximo, 900);
+  assert.ok(OPCOES_TAMANHO_MENSAGENS.every((opcao) => !("minimo" in opcao)));
 });
 
 test("a instrução vale para respostas e follow-up e não exige mínimo", () => {
   const conversa = instrucaoTamanhoMensagens("curta");
   const followup = instrucaoTamanhoMensagens("curta", true);
-  assert.match(conversa, /40 a 150 caracteres/);
+  assert.match(conversa, /TETO de até 150 caracteres/);
   assert.match(conversa, /ferramentas/);
   assert.match(followup, /ÚNICO balão/);
-  assert.match(followup, /O mínimo é apenas referência/);
+  assert.match(followup, /sem mínimo/);
+  assert.match(conversa, /respostas simples e naturalmente curtas/);
 });
 
-test("balão curto original não é modificado", () => {
+test("balão curto original não é modificado nem na opção de mensagens longas", () => {
   const mensagem = "Sim, é possível importar seus contatos.";
   assert.deepEqual(ajustarBaloesGerados([mensagem], "curta"), [mensagem]);
+  assert.deepEqual(ajustarBaloesGerados([mensagem], "longa"), [mensagem]);
 });
 
 test("divide mensagem gerada em frases sem cortar conteúdo", () => {
