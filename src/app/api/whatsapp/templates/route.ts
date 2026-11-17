@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { atribuirUrlImagemTemplate } from "@/lib/whatsapp/template-media-preview";
 import { can } from "@/lib/permissoes/frontend";
 import {
   createMetaTemplate,
@@ -164,6 +165,39 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const temImagem = input.components.some(
+      (item) => item.type === "HEADER" && item.format === "IMAGE"
+    );
+    const previewPath = String(body.preview_image_path || "").trim();
+    let previewUrl = "";
+
+    if (temImagem) {
+      const prefixo = `whatsapp-templates/${usuario.empresa_id}/${integracao.id}/uploads/`;
+      const nomeArquivo = previewPath.slice(prefixo.length);
+      if (
+        !previewPath.startsWith(prefixo) ||
+        !/^[0-9a-f-]{36}\.(png|jpg)$/.test(nomeArquivo)
+      ) {
+        return NextResponse.json(
+          { ok: false, error: "Imagem permanente do template não encontrada. Envie a imagem novamente." },
+          { status: 400 }
+        );
+      }
+
+      const { data: encontrados, error: storageError } = await supabaseAdmin.storage
+        .from("midias")
+        .list(prefixo.replace(/\/$/, ""), { search: nomeArquivo, limit: 10 });
+
+      if (storageError || !encontrados?.some((item) => item.name === nomeArquivo)) {
+        return NextResponse.json(
+          { ok: false, error: "A imagem do template não foi armazenada corretamente. Envie novamente." },
+          { status: 400 }
+        );
+      }
+
+      previewUrl = supabaseAdmin.storage.from("midias").getPublicUrl(previewPath).data.publicUrl;
+    }
+
     const metaResponse = await createMetaTemplate({
       wabaId: integracao.waba_id,
       accessToken,
@@ -189,7 +223,9 @@ export async function POST(req: NextRequest) {
       categoria: input.category,
       idioma: input.language,
       status: templateStatus,
-      payload: input,
+      payload: metaResponse.ok && previewUrl
+        ? atribuirUrlImagemTemplate(input, previewUrl)
+        : input,
       respostaMeta: metaResponse.data,
       usuarioId: usuario.id,
       optOutHabilitado: templatePossuiInstrucaoOptOut(

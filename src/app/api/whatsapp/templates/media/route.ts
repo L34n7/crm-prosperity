@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getUsuarioContexto } from "@/lib/auth/get-usuario-contexto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -234,9 +235,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // O handle da Meta não pode ser exibido como imagem no navegador.
+    // Guardamos o arquivo original no bucket público para prévia e futuros disparos.
+    const extensao = mimeType === "image/png" ? "png" : "jpg";
+    const previewPath = [
+      "whatsapp-templates",
+      contexto.usuario.empresa_id,
+      integracaoWhatsappId,
+      "uploads",
+      `${randomUUID()}.${extensao}`,
+    ].join("/");
+    const { error: storageError } = await supabaseAdmin.storage
+      .from("midias")
+      .upload(previewPath, fileBuffer, {
+        contentType: mimeType,
+        cacheControl: "3600",
+        upsert: false,
+      });
+
+    if (storageError) {
+      throw new Error(`Não foi possível guardar a imagem do template: ${storageError.message}`);
+    }
+
     return NextResponse.json({
       ok: true,
       handle,
+      preview_path: previewPath,
       arquivo: {
         nome: file.name,
         mime_type: mimeType,

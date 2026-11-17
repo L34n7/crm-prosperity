@@ -6,6 +6,7 @@ import Header from "@/components/Header";
 import GuiaTemplates from "@/components/GuiaTemplates";
 import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./templates-whatsapp.module.css";
+import { obterUrlImagemTemplate } from "@/lib/whatsapp/template-media-preview";
 import { obterFooterOptOut } from "@/lib/whatsapp/opt-out-policy";
 import {
   ERRO_LINK_DIRETO_WHATSAPP_TEMPLATE,
@@ -408,6 +409,8 @@ export default function TemplatesWhatsAppPage() {
   const [headerImage, setHeaderImage] = useState<File | null>(null);
   const headerImageInputRef = useRef<HTMLInputElement>(null);
   const [headerImagePreview, setHeaderImagePreview] = useState("");
+  const [restaurandoImagemId, setRestaurandoImagemId] = useState("");
+  const [imagensComErro, setImagensComErro] = useState<string[]>([]);
   const [bodyText, setBodyText] = useState(
     "Olá {{1}}, seu atendimento foi iniciado com sucesso. O protocolo gerado foi {{2}}. Guarde esta informação."
   );
@@ -932,6 +935,7 @@ export default function TemplatesWhatsAppPage() {
       setSubmitting(true);
 
       const components: TemplateComponent[] = [];
+      let previewImagePath = "";
 
       if (headerImageEnabled && headerImage) {
         const imagemParaUpload =
@@ -963,6 +967,10 @@ export default function TemplatesWhatsAppPage() {
           );
         }
 
+        if (!mediaJson.preview_path) {
+          throw new Error("A imagem foi enviada à Meta, mas não foi armazenada para a prévia.");
+        }
+        previewImagePath = String(mediaJson.preview_path);
         components.push({
           type: "HEADER",
           format: "IMAGE",
@@ -1034,6 +1042,7 @@ export default function TemplatesWhatsAppPage() {
           category,
           language: TEMPLATE_LANGUAGE,
           components,
+          preview_image_path: previewImagePath,
         }),
       });
 
@@ -1076,6 +1085,40 @@ export default function TemplatesWhatsAppPage() {
       setErro(error?.message || "Erro ao criar template.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function restaurarImagemTemplate(template: WhatsAppTemplate, file: File | null) {
+    if (!file) return;
+    if (!MIME_IMAGENS_TEMPLATE.has(file.type) || file.size > LIMITE_IMAGEM_TEMPLATE_BYTES) {
+      setErroSincronizacao("Selecione uma imagem JPG ou PNG com até 5 MB.");
+      return;
+    }
+
+    setRestaurandoImagemId(template.id);
+    setErroSincronizacao("");
+    try {
+      const form = new FormData();
+      form.append("template_id", template.id);
+      form.append("file", await prepararImagemTemplateParaUpload(file));
+      const resposta = await fetch("/api/whatsapp/templates/media/restaurar", {
+        method: "POST",
+        body: form,
+      });
+      const resultado = await lerRespostaJsonSegura(
+        resposta,
+        "Não foi possível restaurar a imagem deste template."
+      );
+      if (!resposta.ok || !resultado.ok) {
+        throw new Error(resultado.error || "Erro ao restaurar imagem.");
+      }
+      setImagensComErro((atual) => atual.filter((id) => id !== template.id));
+      setMensagem(`Imagem do template ${template.nome} restaurada com sucesso.`);
+      await carregarTemplates(filtroIntegracao);
+    } catch (error) {
+      setErroSincronizacao(error instanceof Error ? error.message : "Erro ao restaurar imagem.");
+    } finally {
+      setRestaurandoImagemId("");
     }
   }
 
@@ -1287,12 +1330,8 @@ export default function TemplatesWhatsAppPage() {
                       const headerFormat = String(
                         headerComponent?.format || (header ? "TEXT" : "")
                       ).toUpperCase();
-                      const headerImageUrl =
-                        headerFormat === "IMAGE"
-                          ? (headerComponent?.example?.header_handle || [])
-                              .map((item) => String(item || "").trim())
-                              .find((item) => /^https?:\/\//i.test(item)) || ""
-                          : "";
+                      const headerImageUrl = obterUrlImagemTemplate(template.payload);
+                      const imagemIndisponivel = imagensComErro.includes(template.id);
                       const body = extrairBody(template.payload);
                       const footer = extrairFooter(template.payload);
                       const quickReplies = extrairQuickReplies(template.payload);
@@ -1312,15 +1351,32 @@ export default function TemplatesWhatsAppPage() {
 
                               <div className={styles.whatsappPreviewArea}>
                                 <div className={styles.whatsappBubble}>
-                                  {headerImageUrl ? (
+                                  {headerImageUrl && !imagemIndisponivel ? (
                                     <img
                                       src={headerImageUrl}
                                       alt={`Imagem do template ${template.nome}`}
                                       className={styles.whatsappPreviewImage}
+                                      onError={() => setImagensComErro((anterior) =>
+                                        anterior.includes(template.id) ? anterior : [...anterior, template.id]
+                                      )}
                                     />
                                   ) : headerFormat === "IMAGE" ? (
                                     <div className={styles.templateImageFallback}>
-                                      Imagem vinculada ao template
+                                      <span>Prévia da imagem indisponível</span>
+                                      {(podeCriarTemplate || headerUser.permissoes.includes("whatsapp_templates.sincronizar")) && (
+                                      <label className={styles.templateImageRestoreButton}>
+                                        {restaurandoImagemId === template.id ? "Restaurando imagem..." : "Restaurar imagem"}
+                                        <input
+                                          type="file"
+                                          accept="image/jpeg,image/png"
+                                          disabled={Boolean(restaurandoImagemId)}
+                                          onChange={(event) => {
+                                            void restaurarImagemTemplate(template, event.target.files?.[0] || null);
+                                            event.target.value = "";
+                                          }}
+                                        />
+                                      </label>
+                                      )}
                                     </div>
                                   ) : null}
 

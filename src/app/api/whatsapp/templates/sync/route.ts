@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { obterUrlImagemTemplate, atribuirUrlImagemTemplate } from "@/lib/whatsapp/template-media-preview";
+import { buscarTemplateWhatsappPorChave } from "@/lib/whatsapp/templates-local";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { can } from "@/lib/permissoes/frontend";
 import { listMetaTemplates } from "@/lib/whatsapp/templates";
@@ -25,6 +27,7 @@ async function armazenarImagemTemplateSincronizado(params: {
   integracaoId: string;
   metaTemplateId: string;
   components: any[];
+  urlLocalAnterior?: string;
 }) {
   const components = JSON.parse(JSON.stringify(params.components || [])) as any[];
   const header = components.find(
@@ -35,6 +38,15 @@ async function armazenarImagemTemplateSincronizado(params: {
 
   if (!header) {
     return { components, armazenada: false };
+  }
+
+  // Preserva imagens já armazenadas; a Meta pode devolver apenas um handle
+  // opaco ou uma URL temporária na próxima sincronização.
+  if (params.urlLocalAnterior) {
+    return {
+      components: (atribuirUrlImagemTemplate({ components }, params.urlLocalAnterior) as { components: any[] }).components,
+      armazenada: false,
+    };
   }
 
   const handles = Array.isArray(header?.example?.header_handle)
@@ -257,6 +269,24 @@ export async function POST(req: NextRequest) {
         ? item.components
         : [];
 
+      const { template: existente, error: consultaError } =
+        await buscarTemplateWhatsappPorChave({
+          supabase: supabaseAdmin,
+          empresaId: usuario.empresa_id,
+          wabaId: integracao.waba_id,
+          nome,
+          idioma,
+        });
+      if (consultaError) {
+        console.error("Erro ao consultar imagem anterior do template:", consultaError);
+        continue;
+      }
+
+      const urlAnterior = obterUrlImagemTemplate(existente?.payload);
+      const urlPermanente = /^https:\/\/scontent\.whatsapp\.net\//i.test(urlAnterior)
+        ? ""
+        : urlAnterior;
+
       try {
         const cacheMidia = await armazenarImagemTemplateSincronizado({
           supabaseAdmin,
@@ -264,6 +294,7 @@ export async function POST(req: NextRequest) {
           integracaoId: integracao.id,
           metaTemplateId,
           components,
+          urlLocalAnterior: urlPermanente,
         });
 
         components = cacheMidia.components;
