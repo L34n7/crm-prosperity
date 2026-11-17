@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { selecionarMensagensRecebidasDistintas } from "./mensagens-recebidas-distintas";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -103,33 +104,35 @@ function quantidadeParesSemelhantes(textos: string[], limiar: number) {
 export async function detectarAutomacaoExterna(params: {
   empresaId: string;
   conversaId: string;
-  conteudoAgregado?: string | null;
 }): Promise<ResultadoDeteccaoAutomacaoExterna> {
   const desde = new Date(
     Date.now() - JANELA_DETECCAO_MINUTOS * 60 * 1000
   ).toISOString();
   const { data, error } = await supabaseAdmin
     .from("mensagens")
-    .select("conteudo, tipo_mensagem, created_at")
+    .select("id, conversa_id, remetente_tipo, mensagem_externa_id, conteudo, tipo_mensagem, created_at")
     .eq("empresa_id", params.empresaId)
     .eq("conversa_id", params.conversaId)
     .eq("remetente_tipo", "contato")
     .gte("created_at", desde)
     .order("created_at", { ascending: false })
-    .limit(LIMITE_MENSAGENS_DETECCAO);
+    .limit(LIMITE_MENSAGENS_DETECCAO * 3);
 
   if (error) {
     console.error("[AGENTE_IA] Falha ao avaliar automação externa:", error);
     return { detectado: false, pontuacao: 0, motivo: null, sinais: [] };
   }
 
-  const textosBanco = (data || [])
+  // A análise usa somente mensagens reais e distintas do contato desta conversa.
+  // O texto agregado da pendência nunca deve contar como uma segunda mensagem.
+  const mensagens = selecionarMensagensRecebidasDistintas(
+    data || [],
+    params.conversaId,
+    LIMITE_MENSAGENS_DETECCAO
+  );
+  const textos = mensagens
     .map((item) => String(item.conteudo || "").trim())
     .filter((texto) => texto.length >= 8);
-  const conteudoAgregado = String(params.conteudoAgregado || "").trim();
-  const textos = Array.from(
-    new Set([conteudoAgregado, ...textosBanco].filter(Boolean))
-  ).slice(0, LIMITE_MENSAGENS_DETECCAO + 1);
 
   let pontuacao = 0;
   const sinais: string[] = [];
@@ -159,7 +162,7 @@ export async function detectarAutomacaoExterna(params: {
     pontuacao += 15;
   }
 
-  const datas = (data || [])
+  const datas = mensagens
     .map((item) => new Date(item.created_at).getTime())
     .filter(Number.isFinite)
     .sort((a, b) => b - a);

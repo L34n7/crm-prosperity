@@ -423,7 +423,6 @@ export async function processarPendenciaAgenteIa(
   const deteccao = await detectarAutomacaoExterna({
     empresaId: pendencia.empresa_id,
     conversaId: pendencia.conversa_id,
-    conteudoAgregado: pendencia.conteudo_agregado,
   });
   if (deteccao.detectado) {
     return processarAutomacaoExterna(pendenciaId, options, deteccao);

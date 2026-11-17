@@ -1463,7 +1463,6 @@ export async function processarPoliticaAgendaPendencia(
     detectarAutomacaoExterna({
       empresaId: pendencia.empresa_id,
       conversaId: pendencia.conversa_id,
-      conteudoAgregado: pendencia.conteudo_agregado,
     }),
     ativos(pendencia, configuracao.agendaId),
     db
