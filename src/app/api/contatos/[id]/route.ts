@@ -20,6 +20,51 @@ import { podeEditarContatoPelaConversa } from "@/lib/auth/authorization";
 
 const supabaseAdmin = getSupabaseAdmin();
 
+// Nome anterior é um dado de auditoria interno: não integra o catálogo de
+// variáveis de template nem as respostas de listagem para disparos.
+export async function GET(
+  _request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  const { id } = await context.params;
+  const resultado = await getUsuarioContexto();
+  if (!resultado.ok) {
+    return NextResponse.json(
+      { ok: false, error: resultado.error },
+      { status: resultado.status }
+    );
+  }
+
+  const { usuario } = resultado;
+  if (!usuario.empresa_id ||
+      !usuario.permissoes.some((permissao) =>
+        permissao === "contatos.visualizar" || permissao === "contatos.editar"
+      )) {
+    return NextResponse.json(
+      { ok: false, error: "Sem permissão para consultar o contato" },
+      { status: 403 }
+    );
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("contatos")
+    .select("id, nome_anterior")
+    .eq("empresa_id", usuario.empresa_id)
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  }
+  if (!data) {
+    return NextResponse.json({ ok: false, error: "Contato não encontrado" }, { status: 404 });
+  }
+  return NextResponse.json(
+    { ok: true, nome_anterior: data.nome_anterior ?? null },
+    { headers: { "Cache-Control": "private, no-store" } }
+  );
+}
+
 function podeEditarContatos(usuario: UsuarioContexto) {
   return usuario.permissoes.includes("contatos.editar");
 }

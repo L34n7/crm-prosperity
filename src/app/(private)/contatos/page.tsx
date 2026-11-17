@@ -324,6 +324,7 @@ export default function ContatosPage() {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
   const [editNome, setEditNome] = useState("");
+  const [nomesAnteriores, setNomesAnteriores] = useState<Record<string, string | null>>({});
   const [editTelefone, setEditTelefone] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editCampoContato, setEditCampoContato] = useState("");
@@ -935,6 +936,22 @@ export default function ContatosPage() {
     }
   }
 
+  // Campo de auditoria interno: consultado apenas quando o cadastro é aberto,
+  // para não expor o nome anterior em listas, templates ou disparos.
+  async function carregarNomeAnterior(contatoId: string) {
+    try {
+      const response = await fetch(`/api/contatos/${contatoId}`, { cache: "no-store" });
+      if (!response.ok) return;
+      const data: { nome_anterior?: string | null } = await response.json();
+      setNomesAnteriores((anterior) => ({
+        ...anterior,
+        [contatoId]: data.nome_anterior ?? null,
+      }));
+    } catch {
+      // A edição e a consulta do contato continuam disponíveis sem este detalhe.
+    }
+  }
+
   function iniciarEdicao(contato: Contato) {
     const campanhaVinculada =
       contato.rastreamento_campanha_id ||
@@ -947,6 +964,7 @@ export default function ContatosPage() {
 
     setEditandoId(contato.id);
     setExpandidoId(contato.id);
+    void carregarNomeAnterior(contato.id);
     setEditNome(contato.nome || "");
     setEditTelefone(contato.telefone || "");
     setEditEmail(contato.email || "");
@@ -1286,6 +1304,7 @@ export default function ContatosPage() {
     const vaiExpandir = expandidoId !== contatoId;
     setExpandidoId(vaiExpandir ? contatoId : null);
     if (vaiExpandir) {
+      void carregarNomeAnterior(contatoId);
       void carregarInformacoesCaptura(contatoId);
       void carregarListasContato(contatoId);
     }
@@ -2576,6 +2595,18 @@ export default function ContatosPage() {
                             </div>
 
                             <div className={styles.field}>
+                              <label className={styles.label}>Nome anterior (interno)</label>
+                              <input
+                                className={styles.input}
+                                value={nomesAnteriores[contato.id] ?? ""}
+                                placeholder="Sem nome anterior"
+                                readOnly
+                                aria-label="Nome anterior somente para consulta interna"
+                                title="Último nome substituído por importação. Não é usado nos disparos."
+                              />
+                            </div>
+
+                            <div className={styles.field}>
                               <label className={styles.label}>Telefone</label>
                               <input
                                 className={styles.input}
@@ -2693,6 +2724,12 @@ export default function ContatosPage() {
                           </div>
                         ) : (
                           <div className={styles.detailsGrid}>
+                            <div className={styles.infoBlock}>
+                              <span className={styles.infoLabel}>Nome anterior (interno)</span>
+                              <span className={styles.infoValue}>
+                                {nomesAnteriores[contato.id] || "Sem nome anterior"}
+                              </span>
+                            </div>
                             {contato.telefone_revisar && (
                               <div
                                 className={styles.phoneReviewAlert}
@@ -3527,6 +3564,7 @@ export default function ContatosPage() {
                 <p className={styles.cardDescription}>
                   Importe contatos com telefone, e-mail ou ambos. Colunas como "Contato (e-mail)" são reconhecidas automaticamente.
                   E-mails ausentes de contatos existentes podem ser recuperados pelo telefone, sem sobrescrever os e-mails já cadastrados.
+                  Com contatos repetidos habilitados, nomes preenchidos no arquivo substituem os nomes já cadastrados; o nome substituído fica salvo em "Nome anterior" (interno). Nome vazio mantém o cadastro atual.
                 </p>
               </div>
 
@@ -3881,7 +3919,7 @@ export default function ContatosPage() {
                       <strong>Permitir contatos repetidos entre listas</strong>
                       <small>
                         {permitirContatosExistentes
-                          ? "Contatos que já existem no CRM também serão vinculados a esta nova lista."
+                          ? "Contatos existentes serão vinculados e terão o nome atualizado quando o arquivo informar um nome diferente. O anterior será preservado internamente."
                           : "Contatos já existentes não serão vinculados; somente novos contatos entrarão nesta lista."}
                       </small>
                     </span>
