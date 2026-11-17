@@ -409,7 +409,6 @@ export default function TemplatesWhatsAppPage() {
   const [headerImage, setHeaderImage] = useState<File | null>(null);
   const headerImageInputRef = useRef<HTMLInputElement>(null);
   const [headerImagePreview, setHeaderImagePreview] = useState("");
-  const [restaurandoImagemId, setRestaurandoImagemId] = useState("");
   const [imagensComErro, setImagensComErro] = useState<string[]>([]);
   const [bodyText, setBodyText] = useState(
     "Olá {{1}}, seu atendimento foi iniciado com sucesso. O protocolo gerado foi {{2}}. Guarde esta informação."
@@ -1088,40 +1087,6 @@ export default function TemplatesWhatsAppPage() {
     }
   }
 
-  async function restaurarImagemTemplate(template: WhatsAppTemplate, file: File | null) {
-    if (!file) return;
-    if (!MIME_IMAGENS_TEMPLATE.has(file.type) || file.size > LIMITE_IMAGEM_TEMPLATE_BYTES) {
-      setErroSincronizacao("Selecione uma imagem JPG ou PNG com até 5 MB.");
-      return;
-    }
-
-    setRestaurandoImagemId(template.id);
-    setErroSincronizacao("");
-    try {
-      const form = new FormData();
-      form.append("template_id", template.id);
-      form.append("file", await prepararImagemTemplateParaUpload(file));
-      const resposta = await fetch("/api/whatsapp/templates/media/restaurar", {
-        method: "POST",
-        body: form,
-      });
-      const resultado = await lerRespostaJsonSegura(
-        resposta,
-        "Não foi possível restaurar a imagem deste template."
-      );
-      if (!resposta.ok || !resultado.ok) {
-        throw new Error(resultado.error || "Erro ao restaurar imagem.");
-      }
-      setImagensComErro((atual) => atual.filter((id) => id !== template.id));
-      setMensagem(`Imagem do template ${template.nome} restaurada com sucesso.`);
-      await carregarTemplates(filtroIntegracao);
-    } catch (error) {
-      setErroSincronizacao(error instanceof Error ? error.message : "Erro ao restaurar imagem.");
-    } finally {
-      setRestaurandoImagemId("");
-    }
-  }
-
   async function sincronizarTemplatesMeta() {
     try {
       setMensagem("");
@@ -1363,20 +1328,6 @@ export default function TemplatesWhatsAppPage() {
                                   ) : headerFormat === "IMAGE" ? (
                                     <div className={styles.templateImageFallback}>
                                       <span>Prévia da imagem indisponível</span>
-                                      {(podeCriarTemplate || headerUser.permissoes.includes("whatsapp_templates.sincronizar")) && (
-                                      <label className={styles.templateImageRestoreButton}>
-                                        {restaurandoImagemId === template.id ? "Restaurando imagem..." : "Restaurar imagem"}
-                                        <input
-                                          type="file"
-                                          accept="image/jpeg,image/png"
-                                          disabled={Boolean(restaurandoImagemId)}
-                                          onChange={(event) => {
-                                            void restaurarImagemTemplate(template, event.target.files?.[0] || null);
-                                            event.target.value = "";
-                                          }}
-                                        />
-                                      </label>
-                                      )}
                                     </div>
                                   ) : null}
 

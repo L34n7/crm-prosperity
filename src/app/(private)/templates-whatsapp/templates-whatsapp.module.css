@@ -2129,28 +2129,3 @@
   }
 }
 
-/* Recuperação de imagens antigas que a Meta devolve apenas como handle. */
-.templateImageRestoreButton {
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
-  padding: 7px 11px;
-  margin-top: 10px;
-  border: 1px solid var(--crm-primary-border);
-  background: var(--crm-primary-soft);
-  color: var(--crm-primary-text);
-  border-radius: 9px;
-  font-size: 12px;
-  font-weight: 650;
-  cursor: pointer;
-}
-.templateImageRestoreButton:focus-within {
-  outline: 2px solid var(--crm-primary-text);
-  outline-offset: 2px;
-}
-.templateImageRestoreButton input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-}
