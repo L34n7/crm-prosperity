@@ -7956,6 +7956,18 @@
   overflow-wrap: anywhere;
 }
 
+/* Em coluna, a base flexível de 300px se torna altura e deixa um vazio no mobile. */
+@media (max-width: 768px) {
+  .disparoWizardStage .contactsFilterHeader {
+    gap: 12px;
+  }
+
+  .disparoWizardStage .contactsFilterHeader > div:first-child {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+}
+
 /* Disparos: decisões de contatos repetidos, com destinatários identificados. */
 .conflictDescription {
   max-width: 760px;

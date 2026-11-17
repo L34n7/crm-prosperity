@@ -8234,9 +8234,27 @@ a.buttonMessageOption:hover {
 .sidebarHeader:has(.listaAtalhosWrap) { padding-bottom: 7px; }
 
 @media (max-width: 768px) {
-  .listaAtalhosWrap { margin-top: 2px; }
-  .listaAtalhosScroll { padding: 1px 0 2px; }
-  .sidebarHeader:has(.listaAtalhosWrap) { padding-bottom: 5px; }
+  /* Atalhos de listas personalizadas: reduzir somente o respiro vertical. */
+  .quickFilters:has(+ .listaAtalhosWrap) {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    row-gap: 6px;
+  }
+
+  .listaAtalhosWrap {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .listaAtalhosScroll {
+    align-items: center;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  .sidebarHeader:has(.listaAtalhosWrap) {
+    padding-bottom: 3px;
+  }
 }
 /* Aba de listas premium. */
 .listPanelPremium { gap: 14px; min-width: 0; }
