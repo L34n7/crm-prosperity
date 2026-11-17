@@ -7840,7 +7840,8 @@ const templateFooterTexto = useMemo(() => {
                 </>
               )}
 
-              <div className={styles.quickFilters}>
+              <div className={styles.filterBadgesGroup}>
+                <div className={styles.quickFilters}>
 
                 <button
                   className={`${styles.quickChip} ${
@@ -7904,14 +7905,15 @@ const templateFooterTexto = useMemo(() => {
 
           
               </div>
-              <AtalhosListasPersonalizadas
-                listas={listasEmpresa}
-                selecionada={listaFiltroId}
-                onSelecionar={(id) => {
-                  setListaFiltroId((atual) => atual===id ? null : id);
-                  setChipRapido("Todas");
-                }}
-              />
+                <AtalhosListasPersonalizadas
+                  listas={listasEmpresa}
+                  selecionada={listaFiltroId}
+                  onSelecionar={(id) => {
+                    setListaFiltroId((atual) => atual === id ? null : id);
+                    setChipRapido("Todas");
+                  }}
+                />
+              </div>
             </div>
 
             <div
