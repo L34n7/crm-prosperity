@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { textoFollowupUnicoSeguro } from "./resposta-estruturada";
+import { aplicarProtecaoTesteLeonardo } from "./protecao-teste-prosperity-servidor";
 import { ajustarFollowupGerado, instrucaoTamanhoMensagens } from "./tamanho-mensagens";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { mensagemPermiteAcompanhamento, contatoPediuPausaExplicita } from "./followup-ciclo";
@@ -1316,6 +1317,16 @@ export async function processarFollowupAgenteIa(agendamento: {
         })
         .eq("id", execucao.id);
       return { ok: true, cancelado: true, motivo: "atividade_detectada_antes_do_envio" };
+    }
+
+    if (etapa.tipo !== "audio") {
+      texto = (await aplicarProtecaoTesteLeonardo({
+        agenteId,
+        empresaId: agendamento.empresa_id,
+        conversaId,
+        mensagens: [texto],
+        ultimaMensagemDoContato: "",
+      }))[0] || texto;
     }
 
     if (etapa.tipo === "audio") {

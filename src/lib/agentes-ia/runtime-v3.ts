@@ -44,6 +44,7 @@ import {recuperarRespostaEstruturada,textoPareceEstruturaInterna,protegerMensage
 import { ajustarBaloesGerados, instrucaoTamanhoMensagens } from "./tamanho-mensagens";
 import { consultaFaqProduto } from "./preconsulta-faq-produto";
 import { protegerRespostaPosCompraProsperity } from "./protecao-poscompra-prosperity";
+import { aplicarProtecaoTesteLeonardo } from "./protecao-teste-prosperity-servidor";
 import {regrasGeraisBackend,regrasPorFerramentaGeral} from "./prompts-backend";
 import { mensagemEhDuvidaSobreAgendaDoProduto } from "./intencao-agenda-informativa";
 import {
@@ -1984,7 +1985,16 @@ async function enviarMensagensAgente(ctx: ContextoExecucao, mensagens: string[])
   if (!ctx.pendencia.numero_destino) {
     return { supersedido: false, mensagensEnviadas: 0 };
   }
-  const limpas = protegerMensagensSaida(mensagens,MAX_MENSAGENS_SAIDA);
+  const limpas = protegerMensagensSaida(
+    await aplicarProtecaoTesteLeonardo({
+      agenteId: ctx.agente.id,
+      empresaId: ctx.pendencia.empresa_id,
+      conversaId: ctx.pendencia.conversa_id,
+      mensagens,
+      ultimaMensagemDoContato: ctx.pendencia.conteudo_agregado,
+    }),
+    MAX_MENSAGENS_SAIDA
+  );
   let mensagensEnviadas = 0;
   let atrasoTotalMs = 0;
   const delayDinamico = normalizarDelayDinamico(ctx.agente.metadata_json?.delay_dinamico);
@@ -4288,6 +4298,13 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
         agenteId:agente.id,
         ultimaMensagemCliente:pendencia.conteudo_agregado,
         mensagens:saidaFinal.mensagens,
+      });
+      saidaFinal.mensagens = await aplicarProtecaoTesteLeonardo({
+        agenteId: agente.id,
+        empresaId: pendencia.empresa_id,
+        conversaId: pendencia.conversa_id,
+        mensagens: saidaFinal.mensagens,
+        ultimaMensagemDoContato: pendencia.conteudo_agregado,
       });
       // Auditoria e envio compartilham apenas mensagens seguras.
       const quantidadeAntesFiltro=saidaFinal.mensagens.length;
