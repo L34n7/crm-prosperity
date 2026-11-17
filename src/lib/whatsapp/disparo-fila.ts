@@ -143,6 +143,10 @@ export function classificarErroEstruturalCampanhaDisparo(
       chave: "template_nao_aprovado",
       trechos: ["template nao esta aprovado"],
     },
+    {
+      chave: "template_variaveis_obrigatorias_sem_valor",
+      trechos: ["template agendado com variaveis obrigatorias sem valor:"],
+    },
   ];
 
   const regra = regras.find((item) =>

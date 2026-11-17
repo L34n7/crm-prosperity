@@ -17,3 +17,11 @@ test("não classifica número inválido como falha estrutural", () => {
     null
   );
 });
+
+test("interrompe a campanha por variável obrigatória não preenchida no agendamento", () => {
+  const resultado = classificarErroEstruturalCampanhaDisparo(
+    "Template agendado com variaveis obrigatorias sem valor: corpo {{1}} (campo_contato)."
+  );
+
+  assert.equal(resultado?.chave, "template_variaveis_obrigatorias_sem_valor");
+});

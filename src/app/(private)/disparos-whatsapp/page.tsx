@@ -34,6 +34,7 @@ import { solicitarAtualizacaoDisparosPendentesHeader } from "@/lib/header-summar
 import styles from "./disparos-whatsapp.module.css";
 import { createClient } from "@/lib/supabase/client";
 import { podeRealizarDisparos as usuarioPodeRealizarDisparos } from "@/lib/whatsapp/disparo-permissoes";
+import { diagnosticarFalhaInternaDisparo } from "@/lib/whatsapp/disparo-falhas-internas";
 import {
   descreverErroMetaWhatsApp,
   formatarErroMetaWhatsApp,
@@ -1808,13 +1809,18 @@ function agruparFalhasCampanhaHistorico(c: CampanhaHistoricoFiltro): FalhaAgrupa
       continue;
     }
     const descricao = descreverErroMetaWhatsApp(codigo, detalhe);
+    const falhaInterna = codigo ? null : diagnosticarFalhaInternaDisparo(detalhe);
     grupos.set(chave, {
       chave, codigo, quantidade,
-      nome: codigo ? descricao.nome : "Falha não classificada",
-      significado: codigo ? descricao.significado : "A Meta não informou um código que permita identificar a causa desta falha.",
-      resumo: codigo ? descricao.resumo || descricao.significado : "A falha não possui um código informado pela Meta.",
-      acao: descricao.acao,
-      gravidade: gravidadeErroMetaWhatsApp(codigo, detalhe),
+      nome: falhaInterna?.nome || (codigo ? descricao.nome : "Falha não classificada"),
+      significado: falhaInterna?.significado || (codigo
+        ? descricao.significado
+        : detalhe || "Não foi registrado um motivo para esta falha."),
+      resumo: falhaInterna?.resumo || (codigo
+        ? descricao.resumo || descricao.significado
+        : detalhe || "A falha não possui descrição registrada."),
+      acao: falhaInterna?.acao || descricao.acao,
+      gravidade: falhaInterna ? 3 : gravidadeErroMetaWhatsApp(codigo, detalhe),
       detalheTecnico: !codigo && detalhe ? detalhe : null,
     });
   }
