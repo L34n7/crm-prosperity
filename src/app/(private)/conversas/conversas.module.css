@@ -8239,6 +8239,11 @@ a.buttonMessageOption:hover {
 .sidebarHeader:has(.listaAtalhosWrap) { padding-bottom: 7px; }
 
 @media (max-width: 768px) {
+  /* Campo como bloco evita a folga de linha do input inline antes dos filtros. */
+  .sidebarHeader .searchInput {
+    display: block;
+  }
+
   /* Uma única coluna para filtros fixos e listas personalizadas.
      O espaço entre as duas faixas deixa de depender das margens individuais. */
   .filterBadgesGroup {
@@ -8251,7 +8256,9 @@ a.buttonMessageOption:hover {
 
   .filterBadgesGroup .quickFilters {
     flex: 0 0 auto;
+    margin-top: 0;
     margin-bottom: 0;
+    padding-top: 5px;
     padding-bottom: 0;
     row-gap: 6px;
     align-content: flex-start;
