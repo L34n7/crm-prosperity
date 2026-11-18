@@ -8258,7 +8258,8 @@ a.buttonMessageOption:hover {
     flex: 0 0 auto;
     margin-top: 0;
     margin-bottom: 0;
-    padding-top: 5px;
+    /* Espaço suficiente para os contadores elevados sem afastar os filtros. */
+    padding-top: 11px;
     padding-bottom: 0;
     row-gap: 6px;
     align-content: flex-start;

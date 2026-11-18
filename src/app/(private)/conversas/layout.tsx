@@ -44,8 +44,10 @@ const mobileConversationListStyles = `
     box-sizing: border-box !important;
     flex-wrap: nowrap !important;
     gap: 8px !important;
-    margin-top: 6px !important;
-    padding: 12px 2px 4px !important;
+    /* Reserva apenas a altura dos indicadores sobre os chips.
+       O espaçamento entre busca e filtros é controlado no CSS Modules. */
+    margin-top: 0 !important;
+    padding: 11px 0 0 !important;
     overflow-x: auto !important;
     overflow-y: hidden !important;
     overscroll-behavior-x: contain;
