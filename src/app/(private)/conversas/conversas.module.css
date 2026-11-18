@@ -8276,7 +8276,8 @@ a.buttonMessageOption:hover {
   }
 
   .sidebarHeader:has(.listaAtalhosWrap) {
-    padding-bottom: 3px;
+    /* Respiro entre as listas personalizadas e a divisória das conversas. */
+    padding-bottom: 12px;
   }
 }
 /* Aba de listas premium. */
