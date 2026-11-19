@@ -1,4 +1,5 @@
 import { automacoesEmpresaEstaoBloqueadas } from "@/lib/assinaturas/bloqueio-operacional";
+import { envioAutomaticoEstaBloqueado, MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403 } from "@/lib/whatsapp/bloqueio-automatico-conversa";
 import { interpretarDataHorarioAgenda } from "@/lib/agendas/agenda-service";
 import { processarMensagemRecebidaRotinas } from "@/lib/rotinas-automacao/runtime";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -679,6 +680,9 @@ export async function processAutomationEngine(
   input: AutomationEngineInput,
   options: { ignorarValidacaoTemporal?: boolean } = {}
 ) {
+  if (await envioAutomaticoEstaBloqueado({ empresaId: input.empresaId, conversaId: input.conversaId })) {
+    return { ok: true, status: MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403 };
+  }
   if (await automacoesEmpresaEstaoBloqueadas(input.empresaId)) {
     return { ok: true, status: "assinatura_bloqueada" };
   }

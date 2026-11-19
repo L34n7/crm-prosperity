@@ -1,6 +1,10 @@
 import { publicarMensagemEnviadaRegistrada } from "@/lib/rotinas-automacao/mensagem-enviada-dispatch";
 import crypto from "crypto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import {
+  envioAutomaticoEstaBloqueado,
+  MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403,
+} from "@/lib/whatsapp/bloqueio-automatico-conversa";
 import type {
   AutomationEngineInput,
   AutomacaoGatilho,
@@ -1161,7 +1165,7 @@ export async function validarExecucaoAutomacaoAtiva(params: {
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
-    .select("id, contato_id, integracao_whatsapp_id, status, bot_ativo, responsavel_id")
+    .select("id, contato_id, integracao_whatsapp_id, status, bot_ativo, responsavel_id, envios_automaticos_bloqueados_em")
     .eq("id", conversaId)
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -1171,6 +1175,10 @@ export async function validarExecucaoAutomacaoAtiva(params: {
       ok: false,
       motivo: "conversa_nao_encontrada",
     };
+  }
+
+  if (conversa.envios_automaticos_bloqueados_em) {
+    return { ok: false, motivo: MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403 };
   }
 
   if (
@@ -2371,7 +2379,7 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
   const { data: conversaAtual, error: conversaAtualError } = await supabaseAdmin
     .from("conversas")
     .select(
-      "id, status, responsavel_id, bot_ativo, aguardando_atendente, integracao_whatsapp_id"
+      "id, status, responsavel_id, bot_ativo, aguardando_atendente, integracao_whatsapp_id, envios_automaticos_bloqueados_em"
     )
     .eq("empresa_id", empresaId)
     .eq("id", conversaId)
@@ -2384,6 +2392,10 @@ export async function processAutomationEngine(input: AutomationEngineInput) {
     );
 
     return { ok: false, error: "Erro ao buscar conversa." };
+  }
+
+  if (conversaAtual?.envios_automaticos_bloqueados_em) {
+    return { ok: true, status: MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403 };
   }
 
   const integracaoWhatsappIdConversa =
@@ -10420,6 +10432,11 @@ export async function enviarMensagemAutomacao(params: {
 
   const inicioMeta = Date.now();
 
+  if (await envioAutomaticoEstaBloqueado({ empresaId, conversaId })) {
+    return { ok: false, status: null, status_envio: "cancelado",
+      messageId: null, erro: MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403 };
+  }
+
   const envio = await sendWhatsAppTextMessage({
     phoneNumberId,
     accessToken,
@@ -10876,6 +10893,11 @@ async function enviarBotaoRedirectAutomacao({
 
   if (!gatePagamentoMeta.permitido) {
     return resultadoCooldownPagamentoMeta(gatePagamentoMeta);
+  }
+
+  if (await envioAutomaticoEstaBloqueado({ empresaId, conversaId })) {
+    return { ok: false, status: null, status_envio: "cancelado",
+      messageId: null, erro: MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403 };
   }
 
   const envio = await sendWhatsAppInteractiveCtaUrlMessage({

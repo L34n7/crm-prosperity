@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import OpenAI from "openai";
 import { Client as QstashClient } from "@upstash/qstash";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { envioAutomaticoEstaBloqueado, MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403 } from "@/lib/whatsapp/bloqueio-automatico-conversa";
 import { automacoesEmpresaEstaoBloqueadas } from "@/lib/assinaturas/bloqueio-operacional";
 import { validarReservaAgenteIa } from "./validar-reserva";
 import { buscarSaldoTokensIa, registrarUsoTokensIa } from "@/lib/ia/tokens";
@@ -295,6 +296,7 @@ export async function interceptarMensagemAgenteIa(input: AutomationEngineInput) 
   const texto = String(input.mensagemTexto || "").trim();
   const mensagemId = String(input.mensagemId || "").trim() || null;
   if (!texto || !mensagemId) return null;
+  if (await envioAutomaticoEstaBloqueado({ empresaId: input.empresaId, conversaId: input.conversaId })) return null;
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
@@ -534,6 +536,10 @@ async function enviarMensagemAgente(params: {
   const accessToken = getWhatsAppAccessToken(integracao);
   if (!accessToken) throw new Error("Token do WhatsApp indisponível.");
 
+  // Revalidar por conversa no último ponto de saída, inclusive entre balões da IA.
+  if (await envioAutomaticoEstaBloqueado({ empresaId: params.empresaId, conversaId: params.conversaId })) {
+    throw new Error(MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403);
+  }
   // Revalidação no último ponto de saída: a assinatura pode ter sido bloqueada durante a geração da resposta.
   if (await automacoesEmpresaEstaoBloqueadas(params.empresaId)) {
     throw new Error("assinatura_bloqueada");
@@ -957,6 +963,10 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
   }
 
   const pendencia = reservada as PendenciaRow;
+  if (await envioAutomaticoEstaBloqueado({ empresaId: pendencia.empresa_id, conversaId: pendencia.conversa_id })) {
+    await finalizarPendencia({ pendencia, lockToken, status: "cancelado" });
+    return { ok: true, processado: false, motivo: MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403 };
+  }
   const inicio = Date.now();
   let execucaoId = "";
   let ctx: ContextoExecucao | null = null;

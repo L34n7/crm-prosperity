@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { registrarFalha130403Conversa } from "@/lib/whatsapp/bloqueio-automatico-conversa";
 import { sendMetaPaymentBlockedEmail } from "@/lib/email/send-meta-payment-blocked-email";
 import { sendMetaAccountBlockedEmail } from "@/lib/email/send-meta-account-blocked-email";
 import {
@@ -691,6 +692,18 @@ export async function updateWhatsAppMessageStatus({
         "Status não aplicado porque outro callback já avançou a mensagem",
       messageId: mensagemAtual.id,
     };
+  }
+
+  if (status === "falha" && codigoErroMeta === 130403 && mensagemAtual.empresa_id && mensagemAtual.conversa_id) {
+    try {
+      await registrarFalha130403Conversa({
+        empresaId: mensagemAtual.empresa_id,
+        conversaId: mensagemAtual.conversa_id,
+        mensagemId: mensagemAtual.id,
+      });
+    } catch (erroBloqueioConversa) {
+      console.error("[WHATSAPP 130403] Falha ao proteger conversa após erro de entrega:", erroBloqueioConversa);
+    }
   }
 
   if (status === "falha" && codigoErroMeta === ERRO_META_CONTA_BLOQUEADA) {

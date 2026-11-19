@@ -3,6 +3,7 @@ import {
   normalizarChaveVariavelFluxo,
 } from "@/lib/automacoes/variaveis-fixas-contato";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { envioAutomaticoEstaBloqueado, MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403 } from "@/lib/whatsapp/bloqueio-automatico-conversa";
 import {
   enviarTemplateDisparo,
   type IntegracaoDisparo,
@@ -154,6 +155,9 @@ export async function enviarDisparoWhatsappRotina(params: {
   acaoId: string;
   config: Record<string, unknown>;
 }) {
+  if (await envioAutomaticoEstaBloqueado({ empresaId: params.empresaId, conversaId: params.conversaId })) {
+    return { ignorada: true, motivo: MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403 };
+  }
   const integracaoId = String(params.config.integracao_whatsapp_id || "").trim();
   const templateId = String(params.config.template_id || "").trim();
   const variaveisConfiguradas = Array.isArray(params.config.variaveis)

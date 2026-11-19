@@ -1,5 +1,6 @@
 import { publicarMensagemEnviadaRegistrada } from "@/lib/rotinas-automacao/mensagem-enviada-dispatch";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { envioAutomaticoEstaBloqueado, MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403 } from "@/lib/whatsapp/bloqueio-automatico-conversa";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
@@ -94,6 +95,9 @@ export async function enviarMensagemRotina(params: {
     );
   }
 
+  if (await envioAutomaticoEstaBloqueado({ empresaId: params.empresaId, conversaId: params.conversaId })) {
+    throw new Error(MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403);
+  }
   const envio = await sendWhatsAppTextMessage({
     phoneNumberId,
     accessToken,

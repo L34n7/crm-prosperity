@@ -3,6 +3,7 @@ import { textoFollowupUnicoSeguro } from "./resposta-estruturada";
 import { aplicarProtecaoTesteLeonardo } from "./protecao-teste-prosperity-servidor";
 import { ajustarFollowupGerado, instrucaoTamanhoMensagens } from "./tamanho-mensagens";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { envioAutomaticoEstaBloqueado, MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403 } from "@/lib/whatsapp/bloqueio-automatico-conversa";
 import { mensagemPermiteAcompanhamento, contatoPediuPausaExplicita } from "./followup-ciclo";
 import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
 import { buscarSaldoTokensIa, registrarUsoTokensIa } from "@/lib/ia/tokens";
@@ -344,6 +345,9 @@ export async function agendarFollowupAgenteIa(params: {
   referenciaExecucaoId?: string | null;
   cancelarAnteriores?: boolean;
 }) {
+  if (await envioAutomaticoEstaBloqueado({ empresaId: params.empresaId, conversaId: params.conversaId })) {
+    return { agendado: false, motivo: MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403 };
+  }
   const tentativa = numeroInteiro(params.tentativa, 1, 1, MAX_TENTATIVAS);
   const { data: agente, error: agenteError } = await supabaseAdmin
     .from("agentes_ia")
@@ -718,6 +722,9 @@ async function enviarFollowupTexto(params: {
   if(!textoSeguro){
     throw new Error("Follow-up descartado: resposta estruturada inválida para WhatsApp.");
   }
+  if (await envioAutomaticoEstaBloqueado({ empresaId: params.empresaId, conversaId: params.conversaId })) {
+    throw new Error(MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403);
+  }
   const { data: conversa } = await supabaseAdmin
     .from("conversas")
     .select("integracao_whatsapp_id")
@@ -735,6 +742,9 @@ async function enviarFollowupTexto(params: {
   const accessToken = getWhatsAppAccessToken(integracao);
   if (!accessToken) throw new Error("Token do WhatsApp indisponível.");
 
+  if (await envioAutomaticoEstaBloqueado({ empresaId: params.empresaId, conversaId: params.conversaId })) {
+    throw new Error(MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403);
+  }
   const envio = await sendWhatsAppTextMessage({
     phoneNumberId: integracao.phone_number_id,
     accessToken,
@@ -797,6 +807,9 @@ async function enviarFollowupAudio(params: {
   const midiaId = String(params.etapa.midia_id || "").trim();
   if (!midiaId) throw new Error("Áudio não configurado para esta tentativa.");
 
+  if (await envioAutomaticoEstaBloqueado({ empresaId: params.empresaId, conversaId: params.conversaId })) {
+    throw new Error(MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403);
+  }
   const [{ data: conversa }, { data: midia }] = await Promise.all([
     supabaseAdmin
       .from("conversas")
@@ -832,6 +845,9 @@ async function enviarFollowupAudio(params: {
   const accessToken = getWhatsAppAccessToken(integracao);
   if (!accessToken) throw new Error("Token do WhatsApp indisponível.");
 
+  if (await envioAutomaticoEstaBloqueado({ empresaId: params.empresaId, conversaId: params.conversaId })) {
+    throw new Error(MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403);
+  }
   const envio = await sendWhatsAppMediaMessage({
     phoneNumberId: integracao.phone_number_id,
     accessToken,
@@ -910,6 +926,9 @@ export async function processarFollowupAgenteIa(agendamento: {
   const tentativa = numeroInteiro(payload.tentativa, 1, 1, MAX_TENTATIVAS);
   if (!agenteId || !conversaId || !numeroDestino || !ultimaMensagemContatoId) {
     return { ok: false, cancelado: false, motivo: "payload_followup_invalido" };
+  }
+  if (await envioAutomaticoEstaBloqueado({ empresaId: agendamento.empresa_id, conversaId })) {
+    return { ok: true, cancelado: true, motivo: MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403 };
   }
 
   const { data: jaEnviada } = await supabaseAdmin

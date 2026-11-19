@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { envioAutomaticoEstaBloqueado, MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403 } from "@/lib/whatsapp/bloqueio-automatico-conversa";
 import { automacoesEmpresaEstaoBloqueadas } from "@/lib/assinaturas/bloqueio-operacional";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { sendWhatsAppMediaMessage } from "@/lib/whatsapp/send-media-message";
@@ -106,6 +107,9 @@ export async function enviarMaterialDoAgente(params: Parametros) {
     return { ok: false, error: "Envio bloqueado pela assinatura da empresa." };
   }
 
+  if (await envioAutomaticoEstaBloqueado({ empresaId, conversaId })) {
+    return { ok: false, error: MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403 };
+  }
   const tipoMensagem = (midia.tipo === "arquivo" ? "documento" : midia.tipo) as TipoMensagem;
   const envio = await sendWhatsAppMediaMessage({
     phoneNumberId: integracao.phone_number_id,
