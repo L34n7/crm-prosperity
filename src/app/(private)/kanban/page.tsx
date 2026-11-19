@@ -37,6 +37,7 @@ type ColunaKanban = {
 };
 
 const CLASSIFICACOES_KANBAN: Array<{ id: ClassificacaoLead; titulo: string }> = [
+  { id: "novo", titulo: "Novo" },
   { id: "qualificado", titulo: "Qualificado" },
   { id: "convertido", titulo: "Convertido" },
   { id: "perdido", titulo: "Perdido" },

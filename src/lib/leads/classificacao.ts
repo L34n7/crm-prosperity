@@ -26,7 +26,6 @@ export const CLASSIFICACAO_LEAD_LABEL: Record<ClassificacaoLead, string> = {
 const CLASSIFICACOES_SET = new Set<string>(CLASSIFICACOES_LEAD);
 
 const CLASSIFICACAO_LEGADA_MAP: Record<string, ClassificacaoLead> = {
-  novo: "qualificado",
   cliente: "convertido",
   venda: "convertido",
   vendido: "convertido",
@@ -53,10 +52,6 @@ export function normalizarClassificacaoLead(
 ): ClassificacaoLead {
   const normalizado = normalizarTokenClassificacao(valor);
 
-  if (normalizado === "novo") {
-    return "qualificado";
-  }
-
   if (CLASSIFICACOES_SET.has(normalizado)) {
     return normalizado as ClassificacaoLead;
   }
@@ -77,7 +72,7 @@ export function statusLeadLegadoDaClassificacao(
   classificacao: ClassificacaoLead
 ) {
   if (classificacao === "convertido") return "cliente";
-  if (classificacao === "novo") return "qualificado";
+  if (classificacao === "novo") return "novo";
   return classificacao;
 }
 
@@ -104,15 +99,12 @@ export function classificacaoLeadPorEventoRastreamento(
   }
 
   if (tipoNormalizado === "lead_criado") {
-    return "qualificado";
+    return "novo";
   }
 
   if (
     [
-      "conversa_iniciada",
-      "primeira_mensagem_recebida",
       "lead_qualificado",
-      "fluxo_iniciado",
       "fluxo_transferido_atendimento",
     ].includes(tipoNormalizado)
   ) {

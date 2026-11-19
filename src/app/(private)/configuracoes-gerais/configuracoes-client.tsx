@@ -22,6 +22,8 @@ import IntegracaoMercadoPago from "./IntegracaoMercadoPago";
 import styles from "./configuracoes.module.css";
 
 type Aba = "empresa" | "integracoes";
+type ConfigClassificacao = { ativa: boolean; modo: "hibrido" | "regras"; inatividade_horas: number };
+const CLASSIFICACAO_PADRAO: ConfigClassificacao = { ativa: true, modo: "hibrido", inatividade_horas: 23 };
 type Nicho = {
   id: string;
   codigo: string;
@@ -116,6 +118,10 @@ export default function ConfiguracoesClient({
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [confirmandoNicho, setConfirmandoNicho] = useState(false);
+  const [classificacao, setClassificacao] = useState<ConfigClassificacao>(CLASSIFICACAO_PADRAO);
+  const [classificacaoSalva, setClassificacaoSalva] = useState<ConfigClassificacao>(CLASSIFICACAO_PADRAO);
+  const [carregandoClassificacao, setCarregandoClassificacao] = useState(true);
+  const [salvandoClassificacao, setSalvandoClassificacao] = useState(false);
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
 
@@ -193,6 +199,46 @@ export default function ConfiguracoesClient({
     }
     void carregar();
   }, []);
+
+  useEffect(() => {
+    let ativo = true;
+    async function carregarClassificacao() {
+      try {
+        const resposta = await fetch("/api/configuracoes/classificacao", { cache: "no-store" });
+        const json = await resposta.json();
+        if (!resposta.ok || !json.ok) throw new Error(json.error || "Erro ao consultar classificação.");
+        if (ativo) {
+          setClassificacao(json.configuracao);
+          setClassificacaoSalva(json.configuracao);
+        }
+      } catch (error) {
+        if (ativo) reportarErro(error instanceof Error ? error.message : "Erro ao consultar classificação.");
+      } finally {
+        if (ativo) setCarregandoClassificacao(false);
+      }
+    }
+    void carregarClassificacao();
+    return () => { ativo = false; };
+  }, [reportarErro]);
+
+  async function salvarClassificacao() {
+    setSalvandoClassificacao(true);
+    try {
+      const resposta = await fetch("/api/configuracoes/classificacao", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(classificacao),
+      });
+      const json = await resposta.json();
+      if (!resposta.ok || !json.ok) throw new Error(json.error || "Erro ao salvar classificação.");
+      setClassificacaoSalva(classificacao);
+      reportarSucesso("Classificação automática atualizada.");
+    } catch (error) {
+      reportarErro(error instanceof Error ? error.message : "Erro ao salvar classificação.");
+    } finally {
+      setSalvandoClassificacao(false);
+    }
+  }
 
   function atualizar(campo: keyof FormEmpresa, valor: string) {
     setForm((atual) => ({ ...atual, [campo]: valor }));
@@ -314,6 +360,66 @@ export default function ConfiguracoesClient({
               </>
             ) : null}
 
+            <div className={styles.nicheDivider} />
+            <div className={styles.sectionHeader}>
+              <div>
+                <span className={styles.eyebrow}>Inteligência comercial</span>
+                <h2>Classificação automática de leads</h2>
+                <p>Acompanha conversas de agentes de IA, fluxos, atendimento humano e WhatsApp, atualizando o Kanban.</p>
+              </div>
+            </div>
+            {carregandoClassificacao ? <p>Carregando classificação...</p> : (
+              <div className={styles.leadClassificationBox}>
+                <label className={styles.leadClassificationToggle}>
+                  <span><strong>Ativar classificação automática</strong><small>Habilitada por padrão para todas as empresas.</small></span>
+                  <input
+                    type="checkbox"
+                    checked={classificacao.ativa}
+                    onChange={(e) => setClassificacao((atual) => ({ ...atual, ativa: e.target.checked }))}
+                  />
+                </label>
+                <div className={styles.leadClassificationFields}>
+                  <label className={styles.companyField}>
+                    <span>Modo de classificação</span>
+                    <select
+                      value={classificacao.modo}
+                      disabled={!classificacao.ativa}
+                      onChange={(e) => setClassificacao((atual) => ({
+                        ...atual, modo: e.target.value === "regras" ? "regras" : "hibrido",
+                      }))}
+                    >
+                      <option value="hibrido">Híbrido — regras + IA quando necessário</option>
+                      <option value="regras">Somente regras — sem IA adicional</option>
+                    </select>
+                    <small>{classificacao.modo === "hibrido"
+                      ? "As regras não consomem tokens. Em mensagens ambíguas, a interpretação usa IA e aparece em IA → Tokens."
+                      : "Não utiliza IA para classificação. Mensagens ambíguas permanecem na classificação atual."}</small>
+                  </label>
+                  <label className={styles.companyField}>
+                    <span>Classificar como Perdido após inatividade</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={168}
+                      disabled={!classificacao.ativa}
+                      value={classificacao.inatividade_horas}
+                      onChange={(e) => setClassificacao((atual) => ({
+                        ...atual, inatividade_horas: Math.max(1, Math.min(168, Number(e.target.value) || 23)),
+                      }))}
+                    />
+                    <small>Horas sem resposta após a última mensagem enviada. Padrão: 23h.</small>
+                  </label>
+                </div>
+                <p className={styles.leadClassificationHint}>Ao identificar recusa, o sistema encerra apenas automações e atendimento do bot. Conversas atendidas por pessoas não são encerradas.</p>
+                <div className={styles.leadClassificationActions}>
+                  <button type="button" className={styles.primaryButton}
+                    onClick={() => void salvarClassificacao()}
+                    disabled={salvandoClassificacao || JSON.stringify(classificacao) === JSON.stringify(classificacaoSalva)}>
+                    <Save size={16} /> {salvandoClassificacao ? "Salvando..." : "Salvar classificação"}
+                  </button>
+                </div>
+              </div>
+            )}
             <div className={styles.footer}>
               <p>
                 {empresaWhiteLabel

@@ -17,6 +17,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 const LIMITE_PADRAO_POR_COLUNA = 80;
 const LIMITE_MAXIMO_POR_COLUNA = 200;
 const CLASSIFICACOES_KANBAN: ClassificacaoLead[] = [
+  "novo",
   "qualificado",
   "convertido",
   "perdido",

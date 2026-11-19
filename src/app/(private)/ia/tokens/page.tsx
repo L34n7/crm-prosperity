@@ -97,6 +97,7 @@ function formatarNumero(valor?: number | null) {
 }
 
 function origemLabel(origem: string) {
+  if (origem === "classificacao_leads") return "Classificação de leads";
   if (origem === "interpretar_conexao") return "Interpretação de conexão";
   if (origem === "interpretar_arquivo") return "Análise de arquivo";
   if (origem === "transcrever_audio") return "Transcrição de áudio";

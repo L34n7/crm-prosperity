@@ -289,6 +289,15 @@ function formatarDataHoraLista(createdAt: string) {
     .replace(",", "");
 }
 
+type EventoClassificacaoLead = {
+  id: string;
+  classificacao_nova: "novo" | "qualificado" | "convertido" | "perdido";
+  origem: string;
+  motivo: string | null;
+  valor_conversao: number | null;
+  criado_em: string;
+};
+
 export default function ContatosPage() {
   const [contatos, setContatos] = useState<Contato[]>([]);
 
@@ -323,6 +332,8 @@ export default function ContatosPage() {
 
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [expandidoId, setExpandidoId] = useState<string | null>(null);
+  const [historicoClassificacao, setHistoricoClassificacao] = useState<Record<string, EventoClassificacaoLead[]>>({});
+  const [carregandoHistoricoClassificacao, setCarregandoHistoricoClassificacao] = useState<string | null>(null);
   const [editNome, setEditNome] = useState("");
   const [nomesAnteriores, setNomesAnteriores] = useState<Record<string, string | null>>({});
   const [editTelefone, setEditTelefone] = useState("");
@@ -936,6 +947,23 @@ export default function ContatosPage() {
     }
   }
 
+  async function carregarHistoricoClassificacao(contatoId: string) {
+    setCarregandoHistoricoClassificacao(contatoId);
+    try {
+      const resposta = await fetch("/api/contatos/" + contatoId + "/classificacoes", { cache: "no-store" });
+      const json = await resposta.json();
+      if (!resposta.ok || !json.ok) throw new Error(json.error || "Histórico indisponível.");
+      setHistoricoClassificacao((anterior) => ({
+        ...anterior, [contatoId]: json.historico || [],
+      }));
+    } catch (error) {
+      console.error("[CONTATOS] Histórico de classificações:", error);
+      setHistoricoClassificacao((anterior) => ({ ...anterior, [contatoId]: [] }));
+    } finally {
+      setCarregandoHistoricoClassificacao((atual) => atual === contatoId ? null : atual);
+    }
+  }
+
   // Campo de auditoria interno: consultado apenas quando o cadastro é aberto,
   // para não expor o nome anterior em listas, templates ou disparos.
   async function carregarNomeAnterior(contatoId: string) {
@@ -965,6 +993,7 @@ export default function ContatosPage() {
     setEditandoId(contato.id);
     setExpandidoId(contato.id);
     void carregarNomeAnterior(contato.id);
+    void carregarHistoricoClassificacao(contato.id);
     setEditNome(contato.nome || "");
     setEditTelefone(contato.telefone || "");
     setEditEmail(contato.email || "");
@@ -1305,6 +1334,7 @@ export default function ContatosPage() {
     setExpandidoId(vaiExpandir ? contatoId : null);
     if (vaiExpandir) {
       void carregarNomeAnterior(contatoId);
+      void carregarHistoricoClassificacao(contatoId);
       void carregarInformacoesCaptura(contatoId);
       void carregarListasContato(contatoId);
     }
@@ -2765,6 +2795,38 @@ export default function ContatosPage() {
                               </span>
                             </div>
 
+                            <div className={styles.infoBlockFull}>
+                              <span className={styles.infoLabel}>Linha do tempo · Classificação automática</span>
+                              {carregandoHistoricoClassificacao === contato.id ? (
+                                <span className={styles.infoValue}>Carregando histórico...</span>
+                              ) : (historicoClassificacao[contato.id] || []).length ? (
+                                <ol className={styles.classificacaoTimeline}>
+                                  {(historicoClassificacao[contato.id] || []).map((evento) => (
+                                    <li key={evento.id}>
+                                      <span className={styles.classificacaoTimelineTime}>
+                                        {new Date(evento.criado_em).toLocaleString("pt-BR", {
+                                          day: "2-digit", month: "2-digit",
+                                          hour: "2-digit", minute: "2-digit",
+                                        })}
+                                      </span>
+                                      <strong>{getClassificacaoLabel(evento.classificacao_nova)}</strong>
+                                      <small>
+                                        {evento.origem === "ia" ? "IA" :
+                                         evento.origem === "regra" ? "Regra automática" :
+                                         evento.origem === "inatividade" ? "Inatividade" :
+                                         evento.origem === "inicio" ? "Cadastro" : "Sistema / manual"}
+                                        {evento.motivo ? " · " + evento.motivo : ""}
+                                        {evento.valor_conversao !== null ? " · Valor informado: " +
+                                          new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
+                                            .format(Number(evento.valor_conversao)) : ""}
+                                      </small>
+                                    </li>
+                                  ))}
+                                </ol>
+                              ) : (
+                                <span className={styles.infoValue}>Sem alterações de classificação registradas.</span>
+                              )}
+                            </div>
                             <div className={styles.infoBlock}>
                               <span className={styles.infoLabel}>
                                 Status da conversa

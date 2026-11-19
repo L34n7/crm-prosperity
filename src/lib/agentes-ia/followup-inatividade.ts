@@ -3,6 +3,7 @@ import { textoFollowupUnicoSeguro } from "./resposta-estruturada";
 import { aplicarProtecaoTesteLeonardo } from "./protecao-teste-prosperity-servidor";
 import { ajustarFollowupGerado, instrucaoTamanhoMensagens } from "./tamanho-mensagens";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { classificacaoBloqueiaFollowup } from "@/lib/leads/classificacao-automatica";
 import { envioAutomaticoEstaBloqueado, MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403 } from "@/lib/whatsapp/bloqueio-automatico-conversa";
 import { mensagemPermiteAcompanhamento, contatoPediuPausaExplicita } from "./followup-ciclo";
 import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
@@ -25,6 +26,15 @@ export {
 } from "@/lib/agentes-ia/followup-config";
 
 const supabaseAdmin = getSupabaseAdmin();
+
+async function contatoNaoDeveReceberFollowup(empresaId: string, contatoId?: string | null) {
+  if (!contatoId) return false;
+  const { data, error } = await supabaseAdmin.from("contatos")
+    .select("classificacao")
+    .eq("empresa_id", empresaId).eq("id", contatoId).maybeSingle();
+  if (error) throw error;
+  return classificacaoBloqueiaFollowup(data?.classificacao);
+}
 const MODELO_PADRAO = process.env.OPENAI_AGENT_MODEL?.trim() || "gpt-5.6-luna";
 const JANELA_WHATSAPP_MS = 24 * 60 * 60 * 1000;
 const MARGEM_JANELA_MS = 60 * 1000;
@@ -397,6 +407,9 @@ export async function agendarFollowupAgenteIa(params: {
     conversa.responsavel_id
   ) {
     return { agendado: false, motivo: "conversa_nao_elegivel_followup" };
+  }
+  if (await contatoNaoDeveReceberFollowup(params.empresaId, conversa.contato_id)) {
+    return { agendado: false, motivo: "lead_convertido_ou_perdido" };
   }
   if (
     !saidaMantemSequenciaFollowup({
@@ -975,6 +988,9 @@ export async function processarFollowupAgenteIa(agendamento: {
   if (!conversa || conversa.status !== "bot" || conversa.bot_ativo !== true || conversa.aguardando_atendente === true) {
     return { ok: true, cancelado: true, motivo: "conversa_nao_esta_com_agente" };
   }
+  if (await contatoNaoDeveReceberFollowup(agendamento.empresa_id, conversa.contato_id)) {
+    return { ok: true, cancelado: true, motivo: "lead_convertido_ou_perdido" };
+  }
   if (
     await automacoesContatoEstaoDesabilitadas({
       empresaId: agendamento.empresa_id,
@@ -1288,6 +1304,12 @@ export async function processarFollowupAgenteIa(agendamento: {
         }))
       : false;
 
+    const classificacaoBloqueia =
+      conversaRevalidada &&
+      (await contatoNaoDeveReceberFollowup(
+        agendamento.empresa_id,
+        conversaRevalidada.contato_id || null
+      ));
     const automacoesDesabilitadas =
       conversaRevalidada &&
       (await automacoesContatoEstaoDesabilitadas({
@@ -1314,6 +1336,7 @@ export async function processarFollowupAgenteIa(agendamento: {
       !agendaAindaPendente ||
       !conversaRevalidada ||
       automacoesDesabilitadas ||
+      classificacaoBloqueia ||
       conversaRevalidada.status !== "bot" ||
       conversaRevalidada.bot_ativo !== true ||
       conversaRevalidada.aguardando_atendente === true ||

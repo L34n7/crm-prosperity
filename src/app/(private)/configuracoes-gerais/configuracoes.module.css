@@ -536,3 +536,29 @@
     grid-template-columns: minmax(0, 1fr) 44px;
   }
 }
+
+/* Configurações de classificação comercial nativa */
+.leadClassificationBox {
+  background: var(--crm-surface-muted, var(--crm-surface));
+  border: 1px solid var(--crm-border);
+  border-radius: 16px;
+  padding: 18px;
+  display: grid;
+  gap: 16px;
+}
+.leadClassificationToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  cursor: pointer;
+}
+.leadClassificationToggle span { display: grid; gap: 4px; }
+.leadClassificationToggle small, .leadClassificationHint { color: var(--crm-text-muted); font-size: 13px; }
+.leadClassificationToggle input { width: 19px; height: 19px; accent-color: var(--crm-primary); }
+.leadClassificationFields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+.leadClassificationFields .companyField { min-width: 0; }
+.leadClassificationFields select, .leadClassificationFields input { width: 100%; }
+.leadClassificationHint { margin: 0; line-height: 1.5; }
+.leadClassificationActions { display: flex; justify-content: flex-end; }
+@media (max-width: 760px) { .leadClassificationFields { grid-template-columns: 1fr; } }
