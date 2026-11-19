@@ -8,6 +8,7 @@ import { useHeaderUser } from "@/components/header-user-context";
 import styles from "./templates-whatsapp.module.css";
 import { obterUrlImagemTemplate } from "@/lib/whatsapp/template-media-preview";
 import { obterFooterOptOut } from "@/lib/whatsapp/opt-out-policy";
+import { textoTemEmojiTemplateRestrito } from "@/lib/whatsapp/template-emoji-policy";
 import {
   ERRO_LINK_DIRETO_WHATSAPP_TEMPLATE,
   linkTemplateAbreWhatsappDiretamente,
@@ -496,6 +497,10 @@ export default function TemplatesWhatsAppPage() {
         setErro("O cabeçalho deve ter no máximo 60 caracteres.");
         return;
       }
+      if (textoTemEmojiTemplateRestrito(headerText)) {
+        setErro("O cabeçalho não pode conter emojis. Remova-os para continuar.");
+        return;
+      }
       setEtapaCriacao(2);
       return;
     }
@@ -510,6 +515,13 @@ export default function TemplatesWhatsAppPage() {
       }
       if (bodyExamples.slice(0, totalVariaveisBody).some((exemplo) => !exemplo.trim())) {
         setErro("Preencha todos os exemplos das variáveis antes de avançar.");
+        return;
+      }
+      const indiceBotaoComEmoji = templateButtonsDraft.findIndex((botao) =>
+        textoTemEmojiTemplateRestrito(botao.text)
+      );
+      if (indiceBotaoComEmoji >= 0) {
+        setErro(`O texto do botão ${indiceBotaoComEmoji + 1} não pode conter emojis.`);
         return;
       }
       setEtapaCriacao(3);
@@ -800,6 +812,11 @@ export default function TemplatesWhatsAppPage() {
       return;
     }
 
+    if (textoTemEmojiTemplateRestrito(headerText)) {
+      setErro("O cabeçalho do template não pode conter emojis.");
+      return;
+    }
+
     if (
       headerImageEnabled &&
       headerText.trim() &&
@@ -896,6 +913,11 @@ export default function TemplatesWhatsAppPage() {
 
       if (textoBotao.length > 25) {
         setErro(`O texto do botão ${index + 1} deve ter no máximo 25 caracteres.`);
+        return;
+      }
+
+      if (textoTemEmojiTemplateRestrito(textoBotao)) {
+        setErro(`O texto do botão ${index + 1} não pode conter emojis.`);
         return;
       }
 
@@ -1820,8 +1842,13 @@ export default function TemplatesWhatsAppPage() {
                             maxLength={60}
                           />
                           <p className={styles.help}>
-                            Máximo de 60 caracteres. Quando houver imagem, o CRM mantém este texto como título visual logo abaixo da mídia.
+                            Máximo de 60 caracteres, sem emojis. Quando houver imagem, o CRM mantém este texto como título visual logo abaixo da mídia.
                           </p>
+                          {textoTemEmojiTemplateRestrito(headerText) ? (
+                            <p className={styles.help} role="alert">
+                              Remova os emojis do cabeçalho para continuar.
+                            </p>
+                          ) : null}
                         </div>
                       </div>
                         </>
@@ -1936,6 +1963,7 @@ export default function TemplatesWhatsAppPage() {
                             <p>
                               Adicione até 3 botões. Texto envia uma resposta rápida;
                               Redirect abre um site ou página externa; links diretos para WhatsApp não são permitidos pela Meta.
+                              Os textos dos botões não podem conter emojis.
                             </p>
                           </div>
                           <span className={styles.contentSectionBadge}>
@@ -1987,6 +2015,11 @@ export default function TemplatesWhatsAppPage() {
                                       placeholder="Ex.: Quero saber mais"
                                       maxLength={25}
                                     />
+                                    {textoTemEmojiTemplateRestrito(button.text) ? (
+                                      <p className={styles.help} role="alert">
+                                        Remova os emojis do texto do botão.
+                                      </p>
+                                    ) : null}
                                   </div>
                                 ) : (
                                   <div className={styles.topGrid}>
@@ -2007,6 +2040,11 @@ export default function TemplatesWhatsAppPage() {
                                         placeholder="Ex.: Acessar site"
                                         maxLength={25}
                                       />
+                                      {textoTemEmojiTemplateRestrito(button.text) ? (
+                                        <p className={styles.help} role="alert">
+                                          Remova os emojis do texto do botão.
+                                        </p>
+                                      ) : null}
                                     </div>
 
                                     <div className={styles.field}>

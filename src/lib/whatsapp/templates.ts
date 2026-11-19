@@ -1,3 +1,4 @@
+import { textoTemEmojiTemplateRestrito } from "@/lib/whatsapp/template-emoji-policy";
 import {
   ERRO_LINK_DIRETO_WHATSAPP_TEMPLATE,
   linkTemplateAbreWhatsappDiretamente,
@@ -114,6 +115,10 @@ export function validateTemplateInput(input: CreateTemplateInput) {
     if (header.text.length > 60) {
       errors.push("HEADER deve ter no máximo 60 caracteres.");
     }
+
+    if (textoTemEmojiTemplateRestrito(header.text)) {
+      errors.push("O cabeçalho do template não pode conter emojis. Remova os emojis antes de criar.");
+    }
   }
 
   if (header?.format === "IMAGE") {
@@ -181,6 +186,12 @@ export function validateTemplateInput(input: CreateTemplateInput) {
     if (invalidButton) {
       errors.push("Cada botão deve ter texto entre 1 e 25 caracteres.");
     }
+
+    buttons.buttons.forEach((button, index) => {
+      if (textoTemEmojiTemplateRestrito(button.text)) {
+        errors.push(`O botão ${index + 1} não pode conter emojis no texto.`);
+      }
+    });
 
     for (const button of urlButtons) {
       const url = String(button.url || "").trim();
