@@ -332,11 +332,11 @@ export default function ConversasPageContent() {
   }, [conversaSelecionada?.id]);
 
   const classificacaoConversaAtual =
-    classificacaoDetalhes?.conversaId === conversaSelecionada?.id
+    classificacaoDetalhes !== null && classificacaoDetalhes.conversaId === conversaSelecionada?.id
       ? classificacaoDetalhes.classificacao
       : normalizarClassificacaoConversa(conversaSelecionada?.contatos?.status_lead);
   const historicoClassificacaoConversa =
-    classificacaoDetalhes?.conversaId === conversaSelecionada?.id
+    classificacaoDetalhes !== null && classificacaoDetalhes.conversaId === conversaSelecionada?.id
       ? classificacaoDetalhes.historico
       : [];
 
