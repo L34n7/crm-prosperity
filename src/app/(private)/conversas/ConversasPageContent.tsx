@@ -146,6 +146,49 @@ const EmojiPicker = dynamic(() => import("emoji-picker-react"), {
   loading: () => <span>Carregando emojis...</span>,
 });
 
+type ClassificacaoLeadConversa = "novo" | "qualificado" | "convertido" | "perdido";
+
+type EventoClassificacaoConversa = {
+  id: string;
+  classificacao_nova: ClassificacaoLeadConversa;
+  origem: string;
+  motivo: string | null;
+  valor_conversao: number | null;
+  criado_em: string;
+};
+
+type ClassificacaoConversaDetalhes = {
+  conversaId: string;
+  classificacao: ClassificacaoLeadConversa | null;
+  historico: EventoClassificacaoConversa[];
+};
+
+const ROTULOS_CLASSIFICACAO_CONVERSA: Record<ClassificacaoLeadConversa, string> = {
+  novo: "Novo",
+  qualificado: "Qualificado",
+  convertido: "Convertido",
+  perdido: "Perdido",
+};
+
+function normalizarClassificacaoConversa(valor?: string | null): ClassificacaoLeadConversa | null {
+  const chave = String(valor || "").trim().toLowerCase();
+  if (chave === "cliente") return "convertido";
+  if (chave === "em_atendimento") return "qualificado";
+  if (chave === "novo" || chave === "qualificado" || chave === "convertido" || chave === "perdido") {
+    return chave;
+  }
+  return null;
+}
+
+function rotuloOrigemClassificacaoConversa(origem: string) {
+  if (origem === "ia") return "IA";
+  if (origem === "regra") return "Regra automática";
+  if (origem === "inatividade") return "Inatividade";
+  if (origem === "inicio") return "Cadastro";
+  if (origem === "kanban" || origem === "manual" || origem === "usuario") return "Manual";
+  return "Sistema";
+}
+
 export default function ConversasPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -190,6 +233,10 @@ export default function ConversasPageContent() {
   const marcacaoLidaPendenteRef = useRef<Set<string>>(new Set());
   const [conversaSelecionada, setConversaSelecionada] =
     useState<Conversa | null>(null);
+  const [classificacaoDetalhes, setClassificacaoDetalhes] =
+    useState<ClassificacaoConversaDetalhes | null>(null);
+  const [carregandoClassificacaoId, setCarregandoClassificacaoId] = useState<string | null>(null);
+  const [erroClassificacaoId, setErroClassificacaoId] = useState<string | null>(null);
   const [mensagensFavoritasPainel, setMensagensFavoritasPainel] = useState<
     Mensagem[]
   >([]);
@@ -228,6 +275,70 @@ export default function ConversasPageContent() {
       selecionarConversa(conversaDaUrl);
     }
   }, [conversaParam, conversas, conversaSelecionada?.id]);
+
+  // A classificação pode mudar após o cron ou por ação manual no Kanban.
+  // Atualiza o badge e a linha do tempo sem buscar o histórico completo de mensagens.
+  useEffect(() => {
+    const conversaId = conversaSelecionada?.id;
+    setClassificacaoDetalhes(null);
+    setErroClassificacaoId(null);
+    setCarregandoClassificacaoId(conversaId || null);
+    if (!conversaId) return;
+
+    const controller = new AbortController();
+    let ativo = true;
+    let requisicaoEmAndamento = false;
+
+    async function atualizarClassificacao() {
+      if (requisicaoEmAndamento) return;
+      requisicaoEmAndamento = true;
+      try {
+        const resposta = await fetch(
+          "/api/conversas/" + encodeURIComponent(conversaId!) + "/classificacao",
+          { cache: "no-store", signal: controller.signal }
+        );
+        const json = await resposta.json();
+        if (!resposta.ok || !json.ok) {
+          throw new Error(json.error || "Não foi possível consultar a classificação.");
+        }
+        if (!ativo) return;
+        setClassificacaoDetalhes({
+          conversaId: conversaId!,
+          classificacao: normalizarClassificacaoConversa(json.classificacao),
+          historico: Array.isArray(json.historico) ? json.historico : [],
+        });
+        setErroClassificacaoId(null);
+      } catch (error) {
+        if (ativo && !controller.signal.aborted) {
+          console.error("[CONVERSAS] Classificação do contato:", error);
+          setErroClassificacaoId(conversaId!);
+        }
+      } finally {
+        requisicaoEmAndamento = false;
+        if (ativo) setCarregandoClassificacaoId(null);
+      }
+    }
+
+    void atualizarClassificacao();
+    const intervalo = window.setInterval(() => {
+      if (document.visibilityState === "visible") void atualizarClassificacao();
+    }, 30_000);
+
+    return () => {
+      ativo = false;
+      controller.abort();
+      window.clearInterval(intervalo);
+    };
+  }, [conversaSelecionada?.id]);
+
+  const classificacaoConversaAtual =
+    classificacaoDetalhes?.conversaId === conversaSelecionada?.id
+      ? classificacaoDetalhes.classificacao
+      : normalizarClassificacaoConversa(conversaSelecionada?.contatos?.status_lead);
+  const historicoClassificacaoConversa =
+    classificacaoDetalhes?.conversaId === conversaSelecionada?.id
+      ? classificacaoDetalhes.historico
+      : [];
 
   const [setores, setSetores] = useState<SetorOpcao[]>([]);
   const [usuarios, setUsuarios] = useState<UsuarioOpcao[]>([]);
@@ -8096,6 +8207,20 @@ const templateFooterTexto = useMemo(() => {
                                   {conversaSelecionada.contatos?.nome || "Sem nome"}
                                 </h2>
 
+                                {classificacaoConversaAtual && (
+                                  <span
+                                    className={`${styles.chatLeadBadge} ${
+                                      classificacaoConversaAtual === "convertido" ? styles.chatLeadBadgeConvertido :
+                                      classificacaoConversaAtual === "perdido" ? styles.chatLeadBadgePerdido :
+                                      classificacaoConversaAtual === "qualificado" ? styles.chatLeadBadgeQualificado :
+                                      styles.chatLeadBadgeNovo
+                                    }`}
+                                    title={"Classificação comercial: " + ROTULOS_CLASSIFICACAO_CONVERSA[classificacaoConversaAtual]}
+                                  >
+                                    {ROTULOS_CLASSIFICACAO_CONVERSA[classificacaoConversaAtual]}
+                                  </span>
+                                )}
+
                                 {obterNomeCampanhaContato(
                                   conversaSelecionada.contatos
                                 ) && (
@@ -10448,6 +10573,70 @@ const templateFooterTexto = useMemo(() => {
                                 onSalvar={(valor) => salvarContatoCampo("empresa", valor)}
                                 podeEditar={podeEditarContatoConversa}
                               />
+
+                              <section
+                                className={styles.leadClassificationTimelineCard}
+                                aria-label="Linha do tempo da classificação comercial"
+                              >
+                                <div className={styles.leadClassificationTimelineHeader}>
+                                  <span className={styles.whatsInfoLabel}>CLASSIFICAÇÃO · LINHA DO TEMPO</span>
+                                  {classificacaoConversaAtual && (
+                                    <span className={`${styles.chatLeadBadge} ${
+                                      classificacaoConversaAtual === "convertido" ? styles.chatLeadBadgeConvertido :
+                                      classificacaoConversaAtual === "perdido" ? styles.chatLeadBadgePerdido :
+                                      classificacaoConversaAtual === "qualificado" ? styles.chatLeadBadgeQualificado :
+                                      styles.chatLeadBadgeNovo
+                                    }`}>
+                                      {ROTULOS_CLASSIFICACAO_CONVERSA[classificacaoConversaAtual]}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {carregandoClassificacaoId === conversaSelecionada.id ? (
+                                  <p className={styles.leadClassificationTimelineEmpty}>
+                                    Consultando classificações...
+                                  </p>
+                                ) : erroClassificacaoId === conversaSelecionada.id && !classificacaoDetalhes ? (
+                                  <p className={styles.leadClassificationTimelineEmpty}>
+                                    Não foi possível consultar o histórico neste momento.
+                                  </p>
+                                ) : historicoClassificacaoConversa.length === 0 ? (
+                                  <p className={styles.leadClassificationTimelineEmpty}>
+                                    Nenhuma mudança de classificação registrada até agora.
+                                  </p>
+                                ) : (
+                                  <ol className={styles.leadClassificationTimeline}>
+                                    {historicoClassificacaoConversa.map((evento) => (
+                                      <li key={evento.id} className={styles.leadClassificationTimelineEvent}>
+                                        <div className={styles.leadClassificationTimelineTop}>
+                                          <time dateTime={evento.criado_em}>
+                                            {new Intl.DateTimeFormat("pt-BR", {
+                                              day: "2-digit",
+                                              month: "2-digit",
+                                              hour: "2-digit",
+                                              minute: "2-digit",
+                                              timeZone: "America/Sao_Paulo",
+                                            }).format(new Date(evento.criado_em))}
+                                          </time>
+                                          <strong>
+                                            {ROTULOS_CLASSIFICACAO_CONVERSA[evento.classificacao_nova] ||
+                                              evento.classificacao_nova}
+                                          </strong>
+                                        </div>
+                                        <span className={styles.leadClassificationTimelineReason}>
+                                          {rotuloOrigemClassificacaoConversa(evento.origem)}
+                                          {evento.motivo ? " · " + evento.motivo : ""}
+                                          {evento.valor_conversao !== null
+                                            ? " · Valor informado: " + new Intl.NumberFormat("pt-BR", {
+                                                style: "currency", currency: "BRL",
+                                              }).format(Number(evento.valor_conversao))
+                                            : ""}
+                                        </span>
+                                      </li>
+                                    ))}
+                                  </ol>
+                                )}
+                              </section>
 
                               <CampoContatoEditavel
                                 label="INTERESSE"

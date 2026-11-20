@@ -8452,3 +8452,110 @@ a.buttonMessageOption:hover {
 @media (prefers-reduced-motion: reduce) {
   .listPanelSwitchTrack, .listPanelSwitchThumb { transition: none; }
 }
+
+
+/* Classificação comercial: badge do cabeçalho e linha do tempo do contato. */
+.chatLeadBadge {
+  --lead-accent: var(--crm-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  max-width: 118px;
+  min-height: 24px;
+  border: 1px solid color-mix(in srgb, var(--lead-accent) 25%, transparent);
+  border-radius: 999px;
+  padding: 3px 10px;
+  color: var(--lead-accent);
+  background: color-mix(in srgb, var(--lead-accent) 10%, var(--crm-surface));
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.chatLeadBadgeNovo { --lead-accent: var(--crm-text-muted); }
+.chatLeadBadgeQualificado { --lead-accent: #2563eb; }
+.chatLeadBadgeConvertido { --lead-accent: #15803d; }
+.chatLeadBadgePerdido { --lead-accent: #c2410c; }
+
+.leadClassificationTimelineCard {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--crm-border-soft);
+  border-radius: 16px;
+  background: var(--crm-surface);
+}
+.leadClassificationTimelineHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.leadClassificationTimelineEmpty {
+  margin: 9px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--crm-text-muted);
+}
+.leadClassificationTimeline {
+  display: grid;
+  gap: 13px;
+  position: relative;
+  list-style: none;
+  margin: 12px 0 0 5px;
+  padding: 0 0 1px 16px;
+  border-left: 2px solid var(--crm-border);
+  max-height: 340px;
+  overflow-y: auto;
+}
+.leadClassificationTimelineEvent {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding-right: 4px;
+}
+.leadClassificationTimelineEvent::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: -22px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--crm-surface);
+  background: var(--crm-primary);
+}
+.leadClassificationTimelineTop {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px;
+  font-size: 12px;
+}
+.leadClassificationTimelineTop time {
+  color: var(--crm-text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.leadClassificationTimelineTop strong {
+  color: var(--crm-text-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+.leadClassificationTimelineReason {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--crm-text-muted);
+  line-height: 1.5;
+  font-size: 12px;
+}
+@media (prefers-color-scheme: dark) {
+  .chatLeadBadgeQualificado { --lead-accent: #93c5fd; }
+  .chatLeadBadgeConvertido { --lead-accent: #86efac; }
+  .chatLeadBadgePerdido { --lead-accent: #fdba74; }
+}
