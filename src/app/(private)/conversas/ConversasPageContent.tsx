@@ -5929,6 +5929,12 @@ async function baixarConversaPDF() {
     setModalEventoRastreamentoAberto(true);
   }
 
+  // Ao abrir o painel de resultados, atualiza os registros automáticos e manuais.
+  useEffect(() => {
+    if (!conversaSelecionada?.id || !painelDireitoAberto || abaPainelDireito !== "detalhes") return;
+    void carregarEventosRastreamentoDaConversa(conversaSelecionada.id);
+  }, [conversaSelecionada?.id, painelDireitoAberto, abaPainelDireito, classificacaoConversaAtual]);
+
   async function carregarEventosRastreamentoDaConversa(conversaId?: string) {
     if (!podeVisualizarRastreamento) {
       setEventosRastreamentoConversa([]);
@@ -5945,7 +5951,7 @@ async function baixarConversaPDF() {
 
       const params = new URLSearchParams({
         conversa_id: idConversa,
-        origem_registro: "manual",
+        origem_registro: "manual_ou_classificacao",
         limite: "50",
       });
 
@@ -10331,7 +10337,7 @@ const templateFooterTexto = useMemo(() => {
                               <div>
                                 <span className={styles.detailLabel}>Resultado comercial</span>
                                 <strong className={styles.trackingResultTitle}>
-                                  Eventos manuais da conversa
+                                  Resultados da conversa
                                 </strong>
                               </div>
 
@@ -10352,7 +10358,7 @@ const templateFooterTexto = useMemo(() => {
                               </div>
                             ) : eventosRastreamentoConversa.length === 0 ? (
                               <div className={styles.infoBoxMuted}>
-                                Nenhum resultado comercial manual registrado nesta conversa.
+                                Nenhum resultado comercial registrado nesta conversa.
                               </div>
                             ) : (
                               <div className={styles.trackingEventList}>
@@ -10363,7 +10369,9 @@ const templateFooterTexto = useMemo(() => {
                                   >
                                     <div className={styles.trackingEventInfo}>
                                       <strong>
-                                        {getEventoRastreamentoLabel(evento.tipo)}
+                                        {evento.origem_registro === "classificacao"
+                                          ? "Convertido · classificação de lead"
+                                          : getEventoRastreamentoLabel(evento.tipo)}
                                       </strong>
                                       <span>
                                         {evento.metadata_json?.protocolo
@@ -10381,7 +10389,7 @@ const templateFooterTexto = useMemo(() => {
                                         <b>{formatarValorRastreamento(evento.valor)}</b>
                                       )}
 
-                                      {podeGerenciarRastreamento && (
+                                      {podeGerenciarRastreamento && evento.origem_registro === "manual" && (
                                       <div className={styles.listaActions}>
                                         <button
                                           type="button"
@@ -10574,6 +10582,54 @@ const templateFooterTexto = useMemo(() => {
                                 podeEditar={podeEditarContatoConversa}
                               />
 
+
+
+                              <CampoContatoEditavel
+                                label="INTERESSE"
+                                valorInicial={interesseContatoConversa}
+                                editando={editandoCampo === "interesse"}
+                                onEditar={() => setEditandoCampo("interesse")}
+                                onCancelar={() => setEditandoCampo(null)}
+                                onSalvar={(valor) => salvarContatoCampo("interesse", valor)}
+                                podeEditar={podeEditarContatoConversa}
+                              />
+
+                              <div className={styles.whatsInfoRow}>
+                                <span className={styles.whatsInfoLabel}>
+                                  Categoria do lead
+                                </span>
+                                <strong className={styles.whatsInfoValue}>
+                                  {categoriaLeadProtocoloAtual}
+                                </strong>
+                              </div>
+
+                              <CampanhaContatoEditavel
+                                valorInicial={obterNomeCampanhaContato(
+                                  conversaSelecionada.contatos
+                                )}
+                                campanhaIdInicial={
+                                  conversaSelecionada.contatos
+                                    ?.rastreamento_campanha_id || ""
+                                }
+                                campanhas={campanhasRastreamentoContato}
+                                editando={editandoCampo === "campanha"}
+                                onEditar={() => setEditandoCampo("campanha")}
+                                onCancelar={() => setEditandoCampo(null)}
+                                onSalvar={salvarContatoCampanha}
+                                podeEditar={podeEditarContatoConversa}
+                              />
+
+                              <CampoContatoEditavel
+                                label="OBSERVAÇÕES"
+                                valorInicial={conversaSelecionada.contatos?.observacoes || ""}
+                                editando={editandoCampo === "observacoes"}
+                                multiline
+                                onEditar={() => setEditandoCampo("observacoes")}
+                                onCancelar={() => setEditandoCampo(null)}
+                                onSalvar={(valor) => salvarContatoCampo("observacoes", valor)}
+                                podeEditar={podeEditarContatoConversa}
+                              />
+
                               <section
                                 className={styles.leadClassificationTimelineCard}
                                 aria-label="Linha do tempo da classificação comercial"
@@ -10637,52 +10693,6 @@ const templateFooterTexto = useMemo(() => {
                                   </ol>
                                 )}
                               </section>
-
-                              <CampoContatoEditavel
-                                label="INTERESSE"
-                                valorInicial={interesseContatoConversa}
-                                editando={editandoCampo === "interesse"}
-                                onEditar={() => setEditandoCampo("interesse")}
-                                onCancelar={() => setEditandoCampo(null)}
-                                onSalvar={(valor) => salvarContatoCampo("interesse", valor)}
-                                podeEditar={podeEditarContatoConversa}
-                              />
-
-                              <div className={styles.whatsInfoRow}>
-                                <span className={styles.whatsInfoLabel}>
-                                  Categoria do lead
-                                </span>
-                                <strong className={styles.whatsInfoValue}>
-                                  {categoriaLeadProtocoloAtual}
-                                </strong>
-                              </div>
-
-                              <CampanhaContatoEditavel
-                                valorInicial={obterNomeCampanhaContato(
-                                  conversaSelecionada.contatos
-                                )}
-                                campanhaIdInicial={
-                                  conversaSelecionada.contatos
-                                    ?.rastreamento_campanha_id || ""
-                                }
-                                campanhas={campanhasRastreamentoContato}
-                                editando={editandoCampo === "campanha"}
-                                onEditar={() => setEditandoCampo("campanha")}
-                                onCancelar={() => setEditandoCampo(null)}
-                                onSalvar={salvarContatoCampanha}
-                                podeEditar={podeEditarContatoConversa}
-                              />
-
-                              <CampoContatoEditavel
-                                label="OBSERVAÇÕES"
-                                valorInicial={conversaSelecionada.contatos?.observacoes || ""}
-                                editando={editandoCampo === "observacoes"}
-                                multiline
-                                onEditar={() => setEditandoCampo("observacoes")}
-                                onCancelar={() => setEditandoCampo(null)}
-                                onSalvar={(valor) => salvarContatoCampo("observacoes", valor)}
-                                podeEditar={podeEditarContatoConversa}
-                              />
 
                               <InteressesIdentificadosIa
                                 key={String(conversaSelecionada?.contatos?.id || conversaSelecionada.id)}

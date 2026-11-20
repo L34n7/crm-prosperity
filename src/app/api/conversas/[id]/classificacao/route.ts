@@ -105,8 +105,7 @@ export async function GET(
     );
   }
 
-  // Somente mudanças reais são armazenadas; a ordem cronológica favorece
-  // a leitura como linha do tempo, sem etapas consecutivas repetidas.
+  // Retorna as mudanças recentes primeiro, sem repetir classificações iguais.
   return NextResponse.json(
     {
       ok: true,
@@ -114,7 +113,7 @@ export async function GET(
         contatoResultado.data.classificacao ||
         contatoResultado.data.status_lead ||
         null,
-      historico: (historicoResultado.data || []).reverse(),
+      historico: historicoResultado.data || [],
     },
     { headers: { "Cache-Control": "private, no-store" } }
   );

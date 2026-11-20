@@ -28,7 +28,7 @@ export async function GET(
     .order("criado_em", { ascending: false }).limit(60);
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   return NextResponse.json(
-    { ok: true, historico: (data || []).reverse() },
+    { ok: true, historico: data || [] },
     { headers: { "Cache-Control": "private, no-store" } }
   );
 }

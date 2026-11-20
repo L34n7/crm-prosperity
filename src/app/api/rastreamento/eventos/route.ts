@@ -79,7 +79,11 @@ export async function GET(request: Request) {
     query = query.eq("contato_id", contatoId);
   }
 
-  if (origemRegistro) {
+  if (origemRegistro === "manual_ou_classificacao") {
+    // Exibe apenas eventos manuais ou conversões registradas pela classificação;
+    // não mistura eventos operacionais e disparos automáticos.
+    query = query.or("origem_registro.eq.manual,and(origem_registro.eq.classificacao,tipo.eq.objetivo_concluido)");
+  } else if (origemRegistro) {
     query = query.eq("origem_registro", origemRegistro);
   }
 
