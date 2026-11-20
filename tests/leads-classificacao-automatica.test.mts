@@ -4,6 +4,7 @@ import {
   classificarMensagemPorRegras,
   extrairValorConversao,
   classificacaoBloqueiaFollowup,
+  classificacaoAutomaticaProtegida,
 } from "../src/lib/leads/classificacao-automatica.ts";
 
 test("conversão confirmada com valor informado", () => {
@@ -37,4 +38,13 @@ test("conversão só registra valor com moeda explícita", () => {
   assert.equal(extrairValorConversao("R$ 1.250,50"), 1250.5);
   assert.equal(extrairValorConversao("R$ 267"), 267);
   assert.equal(extrairValorConversao("tenho 267 contatos"), null);
+});
+
+// O estágio Convertido pode ter vindo de regra, IA ou edição manual;
+// em qualquer caso o motor deve descartar novas tentativas de classificação.
+test("Convertido permanece protegido de reclassificações automáticas", () => {
+  assert.equal(classificacaoAutomaticaProtegida("convertido"), true);
+  assert.equal(classificacaoAutomaticaProtegida("qualificado"), false);
+  assert.equal(classificacaoAutomaticaProtegida("perdido"), false);
+  assert.equal(classificacaoAutomaticaProtegida("novo"), false);
 });

@@ -162,7 +162,10 @@ export async function aplicarClassificacaoLeadContato(params: {
   const agora = new Date().toISOString();
   const supabase = getSupabaseAdmin();
   const statusLead = statusLeadLegadoDaClassificacao(classificacao);
-  const { error } = await supabase
+  // Mudanças explícitas no Kanban seguem permitidas. Eventos automáticos
+  // nunca podem tirar um contato de Convertido.
+  const origemManual = origem === "kanban" || origem === "manual" || origem === "usuario";
+  let consulta = supabase
     .from("contatos")
     .update({
       classificacao,
@@ -174,6 +177,10 @@ export async function aplicarClassificacaoLeadContato(params: {
     })
     .eq("empresa_id", empresaId)
     .eq("id", contatoId);
+  if (!origemManual) {
+    consulta = consulta.neq("classificacao", "convertido");
+  }
+  const { data, error } = await consulta.select("id");
 
   if (error) {
     throw new Error(
@@ -181,5 +188,5 @@ export async function aplicarClassificacaoLeadContato(params: {
     );
   }
 
-  return { atualizado: true, classificacao, statusLead };
+  return { atualizado: (data?.length ?? 0) > 0, classificacao, statusLead };
 }

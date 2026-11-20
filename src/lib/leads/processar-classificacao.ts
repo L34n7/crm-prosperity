@@ -4,7 +4,7 @@ import { buscarSaldoTokensIa, registrarUsoTokensIa } from "@/lib/ia/tokens";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 import { envioAutomaticoEstaBloqueado } from "@/lib/whatsapp/bloqueio-automatico-conversa";
-import { classificarMensagemPorRegras, type DecisaoClassificacao } from "./classificacao-automatica";
+import { classificarMensagemPorRegras, classificacaoAutomaticaProtegida, type DecisaoClassificacao } from "./classificacao-automatica";
 import type { ClassificacaoLead } from "./classificacao";
 
 const db = getSupabaseAdmin();
@@ -249,15 +249,17 @@ export async function processarClassificacaoPendente(pendencia: Pendencia) {
       return { ok: true, motivo: "contato_ausente" };
     }
 
+    // Convertido é definitivo para classificações automáticas. Nem regras
+    // nem IA são executadas, mesmo que o cliente volte pedindo suporte.
+    if (classificacaoAutomaticaProtegida(contato.classificacao)) {
+      await finalizar("concluido");
+      return { ok: true, motivo: "convertido_preservado" };
+    }
+
     const texto = textoDaMensagem(mensagem as MensagemLead);
     let decisao = texto ? classificarMensagemPorRegras(texto) : null;
     if (!decisao && config.modo === "hibrido" && texto) {
       decisao = await classificarPelaIa(mensagem as MensagemLead, contato.classificacao || "novo");
-    }
-    // Uma nova consulta ao suporte não desfaz uma conversão já registrada.
-    // Reativação comercial após perda permanece permitida.
-    if (decisao?.classificacao === "qualificado" && contato.classificacao === "convertido") {
-      decisao = null;
     }
     if (decisao?.classificacao === "novo" && contato.classificacao !== "novo") {
       decisao = null;

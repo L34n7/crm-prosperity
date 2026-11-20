@@ -65,6 +65,11 @@ export function classificarMensagemPorRegras(textoOriginal: string): DecisaoClas
   return null;
 }
 
+/** Conversões são estágios protegidos: não se avaliam novas mensagens para reclassificação. */
+export function classificacaoAutomaticaProtegida(classificacao: string | null | undefined) {
+  return classificacao === "convertido";
+}
+
 export function classificacaoBloqueiaFollowup(classificacao: string | null | undefined) {
   return classificacao === "convertido" || classificacao === "perdido";
 }
