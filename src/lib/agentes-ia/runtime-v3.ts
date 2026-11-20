@@ -3708,6 +3708,14 @@ async function execucaoFoiSupersedida(pendencia: PendenciaRow) {
     return true;
   }
 
+  // Uma transferência ocorrida enquanto a IA pensava impede qualquer envio tardio.
+  const { data: conversaAtual, error: conversaError } = await supabaseAdmin
+    .from("conversas")
+    .select("id,status,bot_ativo,aguardando_atendente,responsavel_id")
+    .eq("empresa_id", pendencia.empresa_id)
+    .eq("id", pendencia.conversa_id)
+    .maybeSingle();
+  if (conversaError || conversaEstaComHumano(conversaAtual)) return true;
   if (await temNovaVersao(pendencia)) return true;
   return temMensagemContatoNaoProcessada(pendencia);
 }

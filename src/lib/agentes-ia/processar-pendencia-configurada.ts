@@ -2,7 +2,8 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
 import { automacoesEmpresaEstaoBloqueadas } from "@/lib/assinaturas/bloqueio-operacional";
 import { buscarBloqueioLimiteServiceConversa } from "@/lib/whatsapp/service-quota";
-import { assumirConversaParaPendenciaAgenteIa } from "./estado-atendimento-conversa";
+import { assumirConversaParaPendenciaAgenteIa, conversaEstaComHumano } from "./estado-atendimento-conversa";
+import { processarPedidoHumanoPrioritario } from "./transferencia-humana-prioritaria";
 import { processarPoliticaHorarioAtendimento } from "./politica-horario-atendimento";
 import { processarPoliticaAgendaPendencia } from "./politica-agenda";
 import { processarPendenciaAgenteIa as processarPendenciaAgenteIaCore } from "./processar-pendencia-configurada-core";
@@ -14,11 +15,25 @@ export async function processarPendenciaAgenteIa(
   const supabaseAdmin = getSupabaseAdmin();
   const { data: pendencia } = await supabaseAdmin
     .from("agente_ia_pendencias")
-    .select("empresa_id, conversa_id, contato_id")
+    .select("id, empresa_id, agente_id, conversa_id, contato_id, numero_destino, mensagem_ids, conteudo_agregado, status, versao")
     .eq("id", pendenciaId)
     .maybeSingle();
 
   if (pendencia?.empresa_id && pendencia?.conversa_id) {
+    // A fila humana nunca pode ser tomada por uma pendência antiga nem gerar novos follow-ups.
+    const { data: conversaAtual, error: erroConversa } = await supabaseAdmin
+      .from("conversas")
+      .select("id,status,bot_ativo,aguardando_atendente,responsavel_id")
+      .eq("empresa_id", pendencia.empresa_id)
+      .eq("id", pendencia.conversa_id)
+      .maybeSingle();
+    if (erroConversa) throw new Error(erroConversa.message);
+    if (conversaEstaComHumano(conversaAtual)) {
+      await supabaseAdmin.from("agente_ia_pendencias")
+        .update({ status: "cancelado", erro: "atendimento_humano", updated_at: new Date().toISOString() })
+        .eq("id", pendenciaId).eq("status", "pendente");
+      return { ok: true, processado: false, runtime: "atendimento_humano" };
+    }
     if (await automacoesEmpresaEstaoBloqueadas(pendencia.empresa_id)) {
       await supabaseAdmin.from("agente_ia_pendencias")
         .update({ status: "cancelado", erro: "assinatura_bloqueada", lock_token: null, locked_at: null, updated_at: new Date().toISOString() })
@@ -76,6 +91,10 @@ export async function processarPendenciaAgenteIa(
       };
     }
   }
+
+  // Pedidos explícitos de humano têm prioridade sobre as respostas e demais políticas da IA.
+  const transferencia = await processarPedidoHumanoPrioritario(pendenciaId, pendencia, options);
+  if (transferencia.tratado) return transferencia.resultado;
 
   const politicaHorario = await processarPoliticaHorarioAtendimento(pendenciaId);
   if (politicaHorario.tratado) {

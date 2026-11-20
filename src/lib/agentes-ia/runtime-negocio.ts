@@ -401,10 +401,11 @@ async function enviarMensagem(params: {
 
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
-    .select("integracao_whatsapp_id")
+    .select("integracao_whatsapp_id,status,bot_ativo,aguardando_atendente")
     .eq("empresa_id", params.empresaId)
     .eq("id", params.conversaId)
     .maybeSingle();
+  if (conversaComHumano(conversa)) return;
   if (conversaError || !conversa?.integracao_whatsapp_id) {
     throw new Error("Conversa sem integração WhatsApp.");
   }
@@ -646,6 +647,12 @@ async function enviarMensagens(ctx: ContextoRuntime, mensagens: string[]) {
       const delay = Math.min(1200, Math.max(450, 350 + limpas[indice - 1].length * 2));
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
+    const { data: conversaAtual, error: estadoErro } = await supabaseAdmin.from("conversas")
+      .select("id,status,bot_ativo,aguardando_atendente")
+      .eq("empresa_id", ctx.pendencia.empresa_id)
+      .eq("id", ctx.pendencia.conversa_id)
+      .maybeSingle();
+    if (estadoErro || conversaComHumano(conversaAtual)) break;
     if (delayDinamico.ativo && !ctx.acaoCriticaExecutada) {
       const { data: atual } = await supabaseAdmin.from("agente_ia_pendencias")
         .select("versao").eq("id", ctx.pendencia.id).maybeSingle();

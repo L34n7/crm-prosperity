@@ -76,7 +76,7 @@ async function buscarOuCriarProtocolo(params: {
   return data;
 }
 
-async function enviarMensagemContingencia(params: {
+export async function enviarMensagemContingencia(params: {
   empresaId: string;
   conversaId: string;
   agenteId: string;
