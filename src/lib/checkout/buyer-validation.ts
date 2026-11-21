@@ -19,6 +19,21 @@ export function isValidBuyerPhone(value: string) {
   );
 }
 
+/** Retorna apenas números brasileiros válidos provenientes do cadastro do comprador. */
+export function getValidBuyerPhoneOrNull(value: unknown): string | null {
+  const digits = normalizeBuyerPhone(String(value ?? ""));
+  const national =
+    digits.startsWith("55") && (digits.length === 12 || digits.length === 13)
+      ? digits.slice(2)
+      : digits;
+  return isValidBuyerPhone(national) ? digits : null;
+}
+
+/** Não substitui telefone que já foi informado ou corrigido pela empresa. */
+export function shouldFillMissingCompanyPhone(companyPhone: unknown, leadPhone: unknown) {
+  return !String(companyPhone ?? "").trim() && getValidBuyerPhoneOrNull(leadPhone) !== null;
+}
+
 const COMMON_EMAIL_DOMAINS = [
   "gmail.com",
   "hotmail.com",

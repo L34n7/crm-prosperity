@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 import { calcularJanelaAssinatura } from "@/lib/assinaturas/status";
+import { getValidBuyerPhoneOrNull, shouldFillMissingCompanyPhone } from "@/lib/checkout/buyer-validation";
 import { enviarPrimeiroAcesso } from "@/lib/auth/enviar-primeiro-acesso";
 import { notificarFalhaEntregaPrimeiroAcesso } from "@/lib/auth/primeiro-acesso-email-contingencia";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -633,11 +634,41 @@ async function reprocessarAssinaturaInicialFalha(
   }
 }
 
+async function preencherTelefoneEmpresaSeAusente(
+  empresa: any,
+  telefoneLead: string | null
+) {
+  if (!shouldFillMissingCompanyPhone(empresa.telefone, telefoneLead)) return empresa;
+
+  // A verificação condicional evita substituir um telefone informado enquanto
+  // o webhook é processado (inclusive em reentregas concorrentes).
+  let update = supabase
+    .from("empresas")
+    .update({ telefone: telefoneLead })
+    .eq("id", empresa.id);
+  update = empresa.telefone == null
+    ? update.is("telefone", null)
+    : update.eq("telefone", String(empresa.telefone));
+
+  const { data, error } = await update.select("*").maybeSingle();
+  if (error) throw error;
+  if (data) return data;
+
+  // Caso outra requisição já tenha preenchido o telefone, preserve o valor novo.
+  const refreshed = await supabase.from("empresas")
+    .select("*").eq("id", empresa.id).single();
+  if (refreshed.error || !refreshed.data) {
+    throw refreshed.error ?? new Error("Não foi possível carregar a empresa.");
+  }
+  return refreshed.data;
+}
+
 async function obterOuCriarEmpresa(input: {
   lead: any;
   payload: ProsperityPayPayload;
   planoId: string;
 }) {
+  const telefoneLead = getValidBuyerPhoneOrNull(input.lead?.telefone);
   if (input.lead?.empresa_id) {
     const existing = await supabase
       .from("empresas")
@@ -646,7 +677,7 @@ async function obterOuCriarEmpresa(input: {
       .maybeSingle();
 
     if (existing.error) throw existing.error;
-    if (existing.data) return existing.data;
+    if (existing.data) return preencherTelefoneEmpresaSeAusente(existing.data, telefoneLead);
   }
 
   const email = normalizarEmail(
@@ -666,7 +697,7 @@ async function obterOuCriarEmpresa(input: {
     .maybeSingle();
 
   if (byEmail.error) throw byEmail.error;
-  if (byEmail.data) return byEmail.data;
+  if (byEmail.data) return preencherTelefoneEmpresaSeAusente(byEmail.data, telefoneLead);
 
   const nome = String(
     input.lead?.empresa ||
@@ -684,6 +715,7 @@ async function obterOuCriarEmpresa(input: {
       nome_fantasia: nome,
       razao_social: nome,
       email,
+      telefone: telefoneLead,
       nome_responsavel:
         input.payload.customer?.name || input.lead?.nome || null,
       status: "ativa",
