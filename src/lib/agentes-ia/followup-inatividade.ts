@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { textoFollowupUnicoSeguro } from "./resposta-estruturada";
 import { aplicarProtecaoTesteLeonardo } from "./protecao-teste-prosperity-servidor";
+import { identificarPedidoTransferenciaHumana } from "./intencao-transferencia-humana";
 import { ajustarFollowupGerado, instrucaoTamanhoMensagens } from "./tamanho-mensagens";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { classificacaoBloqueiaFollowup } from "@/lib/leads/classificacao-automatica";
@@ -326,7 +327,7 @@ export async function cancelarFollowupsPendentesAgenteIa(params: {
   if (!data?.length) return 0;
   const agora = new Date().toISOString();
   for (const item of data) {
-    await supabaseAdmin
+    const { error: cancelarError } = await supabaseAdmin
       .from("automacao_agendamentos")
       .update({
         status: "cancelado",
@@ -340,6 +341,7 @@ export async function cancelarFollowupsPendentesAgenteIa(params: {
       .eq("id", item.id)
       .eq("empresa_id", params.empresaId)
       .eq("status", "pendente");
+    if (cancelarError) throw new Error("Falha ao cancelar follow-up pendente: " + cancelarError.message);
   }
   return data.length;
 }
@@ -379,6 +381,9 @@ export async function agendarFollowupAgenteIa(params: {
   }
   if (!dentroDaJanela24h(ultimaEntrada.created_at)) {
     return { agendado: false, motivo: "fora_janela_24h" };
+  }
+  if (identificarPedidoTransferenciaHumana(ultimaEntrada.conteudo)) {
+    return { agendado: false, motivo: "cliente_solicitou_atendimento_humano" };
   }
   if (clientePediuPausaNoFollowup(ultimaEntrada.conteudo)) {
     return { agendado: false, motivo: "cliente_aguarda_retorno_proprio" };
@@ -1007,6 +1012,9 @@ export async function processarFollowupAgenteIa(agendamento: {
   if (!ultimaEntrada || ultimaEntrada.id !== ultimaMensagemContatoId) {
     return { ok: true, cancelado: true, motivo: "cliente_ja_respondeu" };
   }
+  if (identificarPedidoTransferenciaHumana(ultimaEntrada.conteudo)) {
+    return { ok: true, cancelado: true, motivo: "cliente_solicitou_atendimento_humano" };
+  }
   if (!dentroDaJanela24h(ultimaEntrada.created_at)) {
     return { ok: true, cancelado: true, motivo: "fora_janela_24h" };
   }
@@ -1332,6 +1340,7 @@ export async function processarFollowupAgenteIa(agendamento: {
         tentativa,
       }) ||
       clientePediuPausaNoFollowup(revalidacaoEntrada.conteudo) ||
+      identificarPedidoTransferenciaHumana(revalidacaoEntrada.conteudo) !== null ||
       !objetivoAindaValido ||
       !agendaAindaPendente ||
       !conversaRevalidada ||

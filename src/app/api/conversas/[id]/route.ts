@@ -19,6 +19,7 @@ import {
   isConversaHistoricoImportado,
 } from "@/lib/conversas/historico-importado";
 import { usuarioPodeAcessarIntegracaoWhatsapp } from "@/lib/whatsapp/integracoes-multiplas";
+import { cancelarFollowupsPendentesAgenteIa } from "@/lib/agentes-ia/followup-inatividade";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -1059,6 +1060,22 @@ export async function PUT(
       { ok: false, error: error.message },
       { status: 500 }
     );
+  }
+
+  // Encerrar manualmente ou encaminhar ao humano elimina follow-ups ainda pendentes.
+  // Esta limpeza não deve desfazer um encerramento já persistido.
+  if (estaEncerrando || parandoAutomacaoEEncerrando || transicaoParaAtendimentoHumano) {
+    try {
+      await cancelarFollowupsPendentesAgenteIa({
+        empresaId: empresa_id,
+        conversaId: id,
+        motivo: estaEncerrando || parandoAutomacaoEEncerrando
+          ? "conversa_encerrada_manualmente"
+          : "atendimento_humano_assumiu",
+      });
+    } catch (errorCancelamento) {
+      console.error("[CONVERSAS] Falha ao cancelar follow-ups após mudança de estado:", errorCancelamento);
+    }
   }
 
   try {

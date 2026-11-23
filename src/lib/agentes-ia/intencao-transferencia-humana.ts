@@ -52,7 +52,7 @@ export function identificarPedidoTransferenciaHumana(valor: unknown): PedidoTran
   const falarDireto = new RegExp(
     "^(?:falar|conversar|ligar|chamar)\\b.{0,55}" + ALVO_HUMANO.source
   ).test(texto);
-  const pedidoSimples = /\b(?:quero|queria|gostaria|prefiro|preciso|desejo)\s+(?:(?:um|uma|o|a)\s+)?(?:atendente|humano|pessoa real|pessoa de verdade)\b/.test(texto);
+  const pedidoSimples = /\b(?:quero|queria|gostaria|prefiro|preciso|desejo)\s+(?:de\s+)?(?:(?:um|uma|o|a)\s+)?(?:atendente|atendimento humano|humano|pessoa real|pessoa de verdade)\b/.test(texto);
   const pedidoParaAlguem = new RegExp(
     "\\b(?:transfere|transfira|transferir|encaminha|encaminhe|encaminhar|passa|passe|passar)\\s+(?:me\\s+)?(?:para|pra|pro|ao)\\b.{0,15}" + ALVO_HUMANO.source
   ).test(texto) && (
@@ -61,9 +61,14 @@ export function identificarPedidoTransferenciaHumana(valor: unknown): PedidoTran
   const direto = pedidoComFala || falarDireto || pedidoSimples || pedidoParaAlguem;
   const transferenciaSemDestino = /^(?:me\s+)?(?:transfere|transfira|encaminhe|encaminha)\s*(?:me|por favor|pfv)?$/.test(texto) ||
     /^(?:pode|poderia|favor|por favor|quero)\s+(?:me\s+)?(?:transferir|encaminhar|transfere|transfira)\s*(?:me)?$/.test(texto);
-  const pedidoDiretoCurto = /^(?:atendente|atendimento humano|humano|pessoa real|pessoa de verdade|falar com atendente|falar com humano)$/.test(texto);
+  // Aceitar pedidos curtos com saudações e fórmulas de cortesia (caso real: Igor).
+  const pedidoDiretoCurto = /^(?:(?:oi|ola|bom dia|boa tarde|boa noite|pessoal)\s+){0,3}(?:atendente|atendimento humano|humano|pessoa real|pessoa de verdade|falar com atendente|falar com humano)(?:\s+(?:por favor|por gentileza|pfv|obrigad[oa]))?$/.test(texto);
+  // Em frases compostas, a solicitação pode estar no final depois de outra pergunta.
+  const pedidoCortesiaNoFinal =
+    /\b(?:atendimento humano|atendente|pessoa real|pessoa de verdade|falar com atendente|falar com humano)\s+(?:por favor|por gentileza|pfv)(?:\s+obrigad[oa])?$/.test(texto) &&
+    !/\b(?:o que significa|como funciona|qual (?:a |o )?(?:diferenca|significado)|quanto custa|voc[e]s? (?:tem|oferecem?)|existe|como configurar)\b.{0,95}\b(?:atendimento humano|atendente)\b/.test(texto);
 
-  if (!direto && !transferenciaSemDestino && !pedidoDiretoCurto) return null;
+  if (!direto && !transferenciaSemDestino && !pedidoDiretoCurto && !pedidoCortesiaNoFinal) return null;
   return {
     destino: DIRECAO.test(texto) ? "direcao" : "atendimento",
     motivo: "pedido_direto",

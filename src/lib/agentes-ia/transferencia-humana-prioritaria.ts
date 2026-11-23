@@ -42,10 +42,12 @@ async function identificarSolicitacaoPendente(
   const possivel = linhas.some(
     (texto) => identificarPedidoTransferenciaHumana(texto) || reiteracaoCurtaDirecao(texto)
   ) || identificarPedidoTransferenciaHumana(agregado);
-  if (!possivel) return null;
+  // O agregado é uma prévia e pode vir vazio ou incompleto. Se existem IDs da
+  // mensagem, conferir as mensagens originais ANTES de entregar o turno ao modelo.
+  const ids = [...new Set((pendencia.mensagem_ids || []).filter(Boolean))];
+  if (!possivel && !ids.length) return null;
 
   // Mensagens do bot ou de outra conversa NUNCA são origem para a solicitação.
-  const ids = (pendencia.mensagem_ids || []).filter(Boolean);
   let entradas: MensagemEntrada[] = [];
   if (ids.length) {
     const { data, error } = await supabaseAdmin
@@ -57,15 +59,25 @@ async function identificarSolicitacaoPendente(
       .in("id", ids.slice(0, 30));
     if (error) {
       console.error("[AGENTE_IA] Falha ao validar mensagens do pedido humano:", error);
-      return null;
+      throw new Error("Falha ao validar pedido de atendimento humano; não continuar com resposta da IA.");
     }
     entradas = (data || []) as MensagemEntrada[];
-    if (!entradas.length) return null;
+  } else if (possivel) {
+    // Sem IDs na pendência, validar na própria conversa a origem da solicitação.
+    const { data, error } = await supabaseAdmin.from("mensagens")
+      .select("id, conteudo, tipo_mensagem, created_at")
+      .eq("empresa_id", pendencia.empresa_id)
+      .eq("conversa_id", pendencia.conversa_id)
+      .eq("remetente_tipo", "contato")
+      .order("created_at", { ascending: false })
+      .limit(15);
+    if (error) throw new Error("Falha ao confirmar remetente do pedido humano.");
+    entradas = (data || []) as MensagemEntrada[];
   }
+  // Nunca inferir um pedido de transferência a partir de texto agregado não validado.
+  if (!entradas.length) return null;
 
-  const textos = entradas.length
-    ? entradas.map((m) => String(m.conteudo || ""))
-    : [agregado];
+  const textos = entradas.map((m) => String(m.conteudo || ""));
   // O áudio é do contato, mas a transcrição pode estar só no conteúdo agregado.
   if (entradas.some((m) => m.tipo_mensagem === "audio")) textos.push(agregado);
   const pedido = textos
@@ -87,7 +99,7 @@ async function identificarSolicitacaoPendente(
     .limit(15);
   if (error) {
     console.error("[AGENTE_IA] Falha ao conferir contexto de reiteracao humana:", error);
-    return null;
+    throw new Error("Falha ao confirmar pedido reiterado de atendimento humano.");
   }
   const idsAtuais = new Set(ids);
   const historico = ((anteriores || []) as MensagemEntrada[])

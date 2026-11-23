@@ -48,8 +48,26 @@ test("não transferir por menções ou recusas", () => {
     "Me passa os valores pro gerente", "Sou o CEO, quero saber preços",
   ]) assert.equal(identificarPedidoTransferenciaHumana(t), null, t);
 });
-test("pedidos simples de transferência são reconhecidos", () => {
-  for(const t of ["Me transfere", "Pode me transferir?", "Atendente", "Humano"]) {
-    assert.ok(identificarPedidoTransferenciaHumana(t), t);
-  }
+test("pedidos simples e com cortesia são reconhecidos (regressão Igor 23/11)", () => {
+  for(const t of [
+    "Me transfere", "Pode me transferir?", "Atendente", "Humano",
+    "(atendimento humano, por favor)", "Atendimento humano, pfv",
+    "Atendimento humano por gentileza", "Oi, atendimento humano por favor",
+    "Sobre aluguel de BM, atendimento humano, por favor",
+    "Gostaria de atendimento humano, por favor", "Preciso de um atendente",
+    "Bom dia, quero falar com um atendente, por favor",
+    "Quero um atendente por favor", "Pode me transferir para o gerente?",
+  ]) assert.ok(identificarPedidoTransferenciaHumana(t), t);
+});
+
+test("não considerar dúvidas sobre atendimento ou pedidos negativos", () => {
+  for(const t of [
+    "O que significa atendimento humano, por favor?",
+    "Como funciona atendimento humano por favor?",
+    "Vocês oferecem atendimento humano, por favor?",
+    "Não quero atendimento humano por favor",
+    "Não me transfira por favor",
+    "O que significa atendente?",
+    "Qual a diferença entre bot e atendimento humano por favor",
+  ]) assert.equal(identificarPedidoTransferenciaHumana(t),null,t);
 });
