@@ -19,7 +19,7 @@ import {
   cancelarFollowupsPendentesAgenteIa,
 } from "./followup-inatividade";
 import { normalizarModoExecucaoAgendamento } from "./modo-agendamento";
-import { mensagemEhPerguntaFinanceiraNaoAgendamento } from "./intencao-financeira-vs-agenda";
+import { mensagemPertenceFluxoAgenda } from "./intencao-agendamento-operacional";
 
 const db = getSupabaseAdmin();
 
@@ -1390,11 +1390,6 @@ export async function processarPoliticaAgendaPendencia(
   }
 
   const pendencia = pendenciaRaw as Pendencia;
-  // "Fechando hoje, já paguei a mensalidade: como pago os disparos?"
-  // não é uma preferência de data para reunião, mesmo com contexto de agenda antigo.
-  if (mensagemEhPerguntaFinanceiraNaoAgendamento(pendencia.conteudo_agregado)) {
-    return { tratado: false };
-  }
   const configuracao = await configAgenda(pendencia.empresa_id, pendencia.agente_id);
   if (!configuracao) return { tratado: false };
 
@@ -1406,6 +1401,15 @@ export async function processarPoliticaAgendaPendencia(
   }
 
   const estadoPersistido = await estadoAtual(pendencia);
+  // Só a intenção de criar/alterar compromisso ou uma resposta compatível
+  // com a agenda em andamento pode acionar a política determinística.
+  // Menções incidentais a datas não devem substituir o agente principal.
+  if (!mensagemPertenceFluxoAgenda(pendencia.conteudo_agregado, {
+    emCurso: agendaEmCurso(estadoPersistido),
+    confirmacaoPendente: Boolean(confirmacaoDoEstado(estadoPersistido, configuracao.agendaId)),
+  })) {
+    return { tratado: false };
+  }
   const novoAgendamentoExplicito = pedidoNovoAgendamento(
     pendencia.conteudo_agregado
   );
