@@ -1074,20 +1074,10 @@ export async function processarFollowupAgenteIa(agendamento: {
     };
   }
 
-  const estadoVersaoPayload = String(payload.estado_versao || "").trim();
-  const estadoVersaoAtual = String(estadoRow?.updated_at || "").trim();
-  if (estadoVersaoPayload && estadoVersaoAtual && estadoVersaoPayload !== estadoVersaoAtual) {
-    const objetivoAtual = classificarObjetivoFollowup(
-      estado.proxima_acao || proximaAcao,
-    );
-    if (objetivoAtual !== objetivoPayload) {
-      return {
-        ok: true,
-        cancelado: true,
-        motivo: "objetivo_followup_alterado",
-      };
-    }
-  }
+  // A atualização do estado interno da IA não é atividade do contato e não
+  // deve interromper a sequência. A validade do ciclo já é garantida pela
+  // última mensagem recebida, situação da conversa e demais bloqueios acima.
+  // A classificação mais recente permanece disponível como contexto da IA.
 
   if (
     await compromissoConcluiObjetivoFollowup({
