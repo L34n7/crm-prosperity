@@ -6,7 +6,7 @@ import { ajustarFollowupGerado, instrucaoTamanhoMensagens } from "./tamanho-mens
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { classificacaoBloqueiaFollowup } from "@/lib/leads/classificacao-automatica";
 import { envioAutomaticoEstaBloqueado, MOTIVO_ENVIO_AUTOMATICO_BLOQUEADO_130403 } from "@/lib/whatsapp/bloqueio-automatico-conversa";
-import { mensagemPermiteAcompanhamento, contatoPediuPausaExplicita } from "./followup-ciclo";
+import { mensagemPermiteAcompanhamento, contatoPediuPausaExplicita, calcularProximaExecucaoFollowupMs } from "./followup-ciclo";
 import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
 import { buscarSaldoTokensIa, registrarUsoTokensIa } from "@/lib/ia/tokens";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
@@ -458,7 +458,24 @@ export async function agendarFollowupAgenteIa(params: {
     config.intervalos_minutos[tentativa - 1] ||
     30;
   const referenciaInatividadeMs = new Date(ultimaEntrada.created_at).getTime();
-  const executarEmMs = referenciaInatividadeMs + intervaloMinutos * 60 * 1000;
+  const intervaloAnteriorMinutos = tentativa > 1
+    ? config.etapas[tentativa - 2]?.intervalo_minutos ||
+      config.intervalos_minutos[tentativa - 2] ||
+      0
+    : 0;
+  const ultimaSaidaMetadata = (ultimaSaida?.metadata_json || {}) as Record<string, unknown>;
+  const ultimaTentativaEnviadaMs =
+    tentativa > 1 &&
+    String(ultimaSaidaMetadata.origem || "") === "agente_ia_followup" &&
+    Number(ultimaSaidaMetadata.followup_tentativa || 0) === tentativa - 1
+      ? new Date(String(ultimaSaida?.created_at || "")).getTime()
+      : null;
+  const executarEmMs = calcularProximaExecucaoFollowupMs({
+    referenciaInatividadeMs,
+    intervaloMinutos,
+    intervaloAnteriorMinutos,
+    ultimaTentativaEnviadaMs,
+  });
   const limiteJanelaMs =
     referenciaInatividadeMs + JANELA_WHATSAPP_MS - MARGEM_JANELA_MS;
   if (executarEmMs >= limiteJanelaMs) {
@@ -1058,8 +1075,8 @@ export async function processarFollowupAgenteIa(agendamento: {
   );
   const estado = (estadoRow?.estado_json || {}) as Record<string, unknown>;
   const proximaAcao = String(
-    payload.proxima_acao ||
-      estado.proxima_acao ||
+    estado.proxima_acao ||
+      payload.proxima_acao ||
       "continuar o atendimento",
   ).trim();
 

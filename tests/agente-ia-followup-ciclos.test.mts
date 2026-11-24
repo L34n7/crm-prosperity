@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { podeIniciarCicloFollowup, mensagemPermiteAcompanhamento, contatoPediuPausaExplicita } from "../src/lib/agentes-ia/followup-ciclo.ts";
+import { podeIniciarCicloFollowup, mensagemPermiteAcompanhamento, contatoPediuPausaExplicita, calcularProximaExecucaoFollowupMs } from "../src/lib/agentes-ia/followup-ciclo.ts";
 test("pitch sem pergunta pode rearmar follow-up a cada nova resposta do cliente",()=>{
  const b={respostaEnviada:true,acaoCriticaExecutada:false,ultimaMensagemContatoId:"primeira",numeroDestino:"5511999999999",mensagensSaida:["Veja o checkout e comece pelo plano Básico."]};
  assert.equal(mensagemPermiteAcompanhamento(b.mensagensSaida[0]),true);
@@ -25,4 +25,27 @@ test("vou pensar continua elegível; pedidos explícitos de parada não",()=>{
 test("pedido de não contato temporário também é respeitado",()=>{
  assert.equal(contatoPediuPausaExplicita("Por enquanto não"),true);
  assert.equal(contatoPediuPausaExplicita("Vou te chamar depois"),true);
+});
+
+test("atraso na tentativa não dispara as próximas etapas de uma vez",()=>{
+ const inicio=Date.parse("2026-11-24T00:48:34Z");
+ const horarioOriginal4=inicio+540*60_000;
+ const tentativa3Recuperada=inicio+1190*60_000;
+ const proximo=calcularProximaExecucaoFollowupMs({
+   referenciaInatividadeMs:inicio, intervaloMinutos:540,
+   intervaloAnteriorMinutos:300, ultimaTentativaEnviadaMs:tentativa3Recuperada,
+ });
+ assert.equal(proximo, tentativa3Recuperada+240*60_000);
+ assert.ok(proximo>horarioOriginal4);
+});
+test("sequência no prazo preserva cumulativo e tentativa inicial não exige anterior",()=>{
+ const inicio=Date.parse("2026-11-24T00:48:34Z");
+ assert.equal(calcularProximaExecucaoFollowupMs({
+   referenciaInatividadeMs:inicio, intervaloMinutos:120,
+   intervaloAnteriorMinutos:30, ultimaTentativaEnviadaMs:inicio+29*60_000,
+ }),inicio+120*60_000);
+ assert.equal(calcularProximaExecucaoFollowupMs({
+   referenciaInatividadeMs:inicio, intervaloMinutos:30,
+   intervaloAnteriorMinutos:0, ultimaTentativaEnviadaMs:null,
+ }),inicio+30*60_000);
 });

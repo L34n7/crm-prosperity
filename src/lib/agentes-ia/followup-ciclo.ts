@@ -30,3 +30,29 @@ export function contatoPediuPausaExplicita(valor: unknown): boolean {
     /\b(?:depois|mais tarde)\s+(?:te retorno|te chamo|falo)\b/.test(texto) ||
     /\b(?:vou|irei)\s+(?:te\s+)?(?:chamar|retornar|voltar)\s+(?:depois|mais tarde)\b/.test(texto);
 }
+
+/**
+ * Preserva a distância entre follow-ups mesmo se uma tentativa foi recuperada
+ * depois do horário original; evita vários envios seguidos por atraso no job.
+ * Os intervalos configurados são cumulativos desde a última entrada do cliente.
+ */
+export function calcularProximaExecucaoFollowupMs(params: {
+  referenciaInatividadeMs: number;
+  intervaloMinutos: number;
+  intervaloAnteriorMinutos: number;
+  ultimaTentativaEnviadaMs?: number | null;
+}): number {
+  const base = params.referenciaInatividadeMs + params.intervaloMinutos * 60_000;
+  if (typeof params.ultimaTentativaEnviadaMs !== "number" ||
+      !Number.isFinite(params.ultimaTentativaEnviadaMs)) {
+    return base;
+  }
+  const entreTentativasMinutos = Math.max(
+    1,
+    params.intervaloMinutos - params.intervaloAnteriorMinutos,
+  );
+  return Math.max(
+    base,
+    params.ultimaTentativaEnviadaMs + entreTentativasMinutos * 60_000,
+  );
+}
