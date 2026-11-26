@@ -32,10 +32,14 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const body = await request.json().catch(() => ({}));
     if (String(body?.confirmacao || "").trim() !== empresa.nome_fantasia.trim())
       return NextResponse.json({ ok: false, error: "Digite o nome da empresa para confirmar o encerramento." }, { status: 400 });
-    if (empresa.status === "cancelada")
-      return NextResponse.json({ ok: true, message: "Empresa já está cancelada." });
     const resultado = await encerrarEmpresaAdministrativamente(id, usuario.id);
-    return NextResponse.json({ ok: true, message: "Empresa encerrada. Dados preservados por até 60 dias; backup pendente de geração.", resultado });
+    return NextResponse.json({
+      ok: true,
+      message: resultado.ja_cancelada
+        ? "Empresa já cancelada. A liberação das integrações WhatsApp foi conferida."
+        : "Empresa encerrada. Integrações WhatsApp liberadas; dados preservados por até 60 dias e backup disponível mediante solicitação.",
+      resultado,
+    });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Erro ao encerrar empresa." }, { status: 400 });
   }

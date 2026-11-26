@@ -21,6 +21,97 @@ async function consultarEmpresa(id: string): Promise<EmpresaEncerramento> {
   return data;
 }
 
+/**
+ * Libera os identificadores operacionais de integrações de uma empresa encerrada.
+ * Mantém o UUID da integração e os vínculos das conversas para o backup.
+ * Idempotente: uma tentativa interrompida pode ser repetida com segurança.
+ */
+export async function liberarIdentificadoresWhatsappEmpresaEncerrada(empresaId: string) {
+  const { data: empresa, error: empresaErro } = await supabase
+    .from("empresas")
+    .select("status")
+    .eq("id", empresaId)
+    .single();
+
+  if (empresaErro || empresa?.status !== "cancelada") {
+    throw new Error("A liberação dos números exige uma empresa já cancelada.");
+  }
+
+  const { data: integracoes, error: consultaErro } = await supabase
+    .from("integracoes_whatsapp")
+    .select(
+      "id,status,numero,posicao,phone_number_id,waba_id,business_account_id,meta_business_id,business_portfolio_id,token_ref,webhook_verificado,phone_registered,app_assigned,is_on_biz_app,platform_type,phone_number_status"
+    )
+    .eq("empresa_id", empresaId);
+
+  if (consultaErro) {
+    throw new Error("Falha ao consultar integrações da empresa encerrada: " + consultaErro.message);
+  }
+
+  let liberadas = 0;
+
+  for (const integracao of integracoes || []) {
+    if (integracao.status !== "desconectada") {
+      throw new Error("A integração ainda não foi desconectada: " + integracao.id);
+    }
+
+    const numeroLiberado = "desconectada_" + integracao.id;
+    const pendente =
+      integracao.numero !== numeroLiberado ||
+      integracao.posicao !== null ||
+      integracao.phone_number_id !== null ||
+      integracao.waba_id !== null ||
+      integracao.business_account_id !== null ||
+      integracao.meta_business_id !== null ||
+      integracao.business_portfolio_id !== null ||
+      integracao.token_ref !== null ||
+      integracao.webhook_verificado !== false ||
+      integracao.phone_registered !== false ||
+      integracao.app_assigned !== false ||
+      integracao.is_on_biz_app !== null ||
+      integracao.platform_type !== null ||
+      integracao.phone_number_status !== "DISCONNECTED";
+
+    if (!pendente) continue;
+
+    const { data: atualizada, error: liberarErro } = await supabase
+      .from("integracoes_whatsapp")
+      .update({
+        numero: numeroLiberado,
+        posicao: null,
+        phone_number_id: null,
+        waba_id: null,
+        business_account_id: null,
+        meta_business_id: null,
+        business_portfolio_id: null,
+        token_ref: null,
+        webhook_verificado: false,
+        phone_registered: false,
+        app_assigned: false,
+        is_on_biz_app: null,
+        platform_type: null,
+        phone_number_status: "DISCONNECTED",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("empresa_id", empresaId)
+      .eq("id", integracao.id)
+      .eq("status", "desconectada")
+      .select("id")
+      .maybeSingle();
+
+    if (liberarErro || !atualizada) {
+      throw new Error(
+        "Falha ao liberar a integração " + integracao.id + ": " +
+          (liberarErro?.message || "a integração mudou de estado.")
+      );
+    }
+
+    liberadas++;
+  }
+
+  return { total: integracoes?.length || 0, liberadas };
+}
+
 async function sincronizarCobrancaSeWhiteLabel(empresa: EmpresaEncerramento) {
   if (!empresa.white_label_id || empresa.white_label_tipo !== "cliente") {
     return null;
@@ -42,12 +133,30 @@ export async function encerrarEmpresaAdministrativamente(empresaId: string, usua
     p_usuario_id: usuarioId,
   });
   if (error) throw new Error(error.message);
+
+  let limpeza: Awaited<ReturnType<typeof liberarIdentificadoresWhatsappEmpresaEncerrada>>;
+  try {
+    // O RPC primeiro bloqueia o uso da integração e as automações. Depois
+    // liberamos o número no backend, sem apagar o registro histórico.
+    limpeza = await liberarIdentificadoresWhatsappEmpresaEncerrada(empresaId);
+  } catch (limpezaErro) {
+    invalidarCacheIntegracaoWhatsapp();
+    throw new Error(
+      "A empresa já foi encerrada, mas houve uma falha ao liberar seus números de WhatsApp. " +
+        "Repita o encerramento para concluir a limpeza: " +
+        (limpezaErro instanceof Error ? limpezaErro.message : String(limpezaErro))
+    );
+  }
+
   // O worker/inbound pode manter cache do número por até 15 segundos.
   // A invalidacão local é somada ao filtro de empresas ativas no lookup.
   invalidarCacheIntegracaoWhatsapp();
-  const {error:origemErro}=await supabase.from("empresas").update({encerramento_origem:origem})
-    .eq("id",empresaId).eq("status","cancelada");
-  if(origemErro)console.error("[ENCERRAMENTO] Falha ao registrar origem",empresaId,origemErro);
+  // Retentar uma etapa não pode sobrescrever a origem do primeiro encerramento.
+  if (!(data as { ja_cancelada?: boolean } | null)?.ja_cancelada) {
+    const {error:origemErro}=await supabase.from("empresas").update({encerramento_origem:origem})
+      .eq("id",empresaId).eq("status","cancelada");
+    if(origemErro)console.error("[ENCERRAMENTO] Falha ao registrar origem",empresaId,origemErro);
+  }
   let aviso: { enviado:boolean; ignorado:boolean; erro?:string };
   try{
     aviso=await enviarAvisoCancelamentoPendente(empresaId);
@@ -62,7 +171,7 @@ export async function encerrarEmpresaAdministrativamente(empresaId: string, usua
   const avisoWarning=aviso.erro
     ? "O e-mail de cancelamento ainda não foi enviado. O sistema tentará novamente: "+aviso.erro
     : null;
-  return { ...(data as Record<string, unknown>), warning: [warning,avisoWarning].filter(Boolean).join(" ") || null, email_cancelamento_enviado:aviso.enviado };
+  return { ...(data as Record<string, unknown>), integracoes_whatsapp: limpeza, warning: [warning,avisoWarning].filter(Boolean).join(" ") || null, email_cancelamento_enviado:aviso.enviado };
 }
 
 export async function restaurarEmpresaAdministrativamente(empresaId: string) {
