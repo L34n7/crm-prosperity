@@ -171,7 +171,7 @@ export async function encerrarEmpresaAdministrativamente(empresaId: string, usua
   const avisoWarning=aviso.erro
     ? "O e-mail de cancelamento ainda não foi enviado. O sistema tentará novamente: "+aviso.erro
     : null;
-  return { ...(data as Record<string, unknown>), integracoes_whatsapp: limpeza, warning: [warning,avisoWarning].filter(Boolean).join(" ") || null, email_cancelamento_enviado:aviso.enviado };
+  return { ...(data as Record<string, unknown>), ja_cancelada: (data as { ja_cancelada?: boolean } | null)?.ja_cancelada === true, integracoes_whatsapp: limpeza, warning: [warning,avisoWarning].filter(Boolean).join(" ") || null, email_cancelamento_enviado:aviso.enviado };
 }
 
 export async function restaurarEmpresaAdministrativamente(empresaId: string) {
