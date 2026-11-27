@@ -40,6 +40,7 @@ const FERRAMENTAS_VALIDAS = new Set([
   "registrar_interesse_preferencia",
   "realizar_venda",
   "enviar_material",
+  "interpretar_arquivo",
 ]);
 const FERRAMENTAS_AGENDA = new Set([
   "consultar_agenda",
@@ -1108,6 +1109,22 @@ export async function PATCH(request: Request) {
     if (Array.isArray(body.ferramentas)) {
       const ferramentas = ferramentasBody(body.ferramentas);
       for (const ferramenta of ferramentas) {
+        if (ferramenta.tipo === "interpretar_arquivo") {
+          const config = ferramenta.config_json;
+          const o = config.orientacoes && typeof config.orientacoes === "object" && !Array.isArray(config.orientacoes)
+            ? config.orientacoes as Record<string, unknown> : {};
+          const campos = ["avaliar", "calcular", "interpretar", "quando_nao_encontrar"];
+          if (campos.some((campo) => String(o[campo] || "").length > 1800)) {
+            return NextResponse.json({ ok: false,
+              error: "Cada instrução da leitura de arquivos aceita até 1.800 caracteres." },
+              { status: 400 });
+          }
+          ferramenta.config_json = {
+            orientacoes: Object.fromEntries(
+              campos.map((campo) => [campo, String(o[campo] || "").trim()])
+            ),
+          };
+        }
         if (ferramenta.tipo === "enviar_material") {
           try {
             const materiais = await validarMateriaisFerramenta(

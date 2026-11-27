@@ -29,6 +29,7 @@ import {
 } from "@/lib/agentes-ia/ferramentas-por-nicho";
 import HorarioAtendimentoEditor from "@/components/agentes-ia/HorarioAtendimentoEditor";
 import AgenteTesteModal from "./components/AgenteTesteModal";
+import LeituraArquivoFerramentaModal from "./components/LeituraArquivoFerramentaModal";
 import ConhecimentoEditorModal from "./components/ConhecimentoEditorModal";
 import MateriaisVinculadosEditor from "./components/MateriaisVinculadosEditor";
 import type { MaterialVinculado } from "@/lib/agentes-ia/materiais-config";
@@ -217,6 +218,11 @@ const FERRAMENTAS = [
     tipo: "consultar_conhecimento",
     titulo: "Consultar conhecimento",
     descricao: "Busca trechos relevantes da base aprovada do agente.",
+  },
+  {
+    tipo: "interpretar_arquivo",
+    titulo: "Ler arquivos (PDF, Excel e Word)",
+    descricao: "Analisa automaticamente documentos recebidos no WhatsApp. Extrai informações, calcula quando houver dados suficientes e segue instruções opcionais.",
   },
   {
     tipo: "enviar_material",
@@ -476,6 +482,7 @@ export default function AgentesIaPage() {
   const [excluindoConhecimento, setExcluindoConhecimento] = useState(false);
   const [erroExclusaoConhecimento, setErroExclusaoConhecimento] = useState("");
   const [testeAberto, setTesteAberto] = useState(false);
+  const [modalLeituraAberto, setModalLeituraAberto] = useState(false);
 
   useEffect(() => {
     if (!conhecimentoParaExcluir) return;
@@ -2313,6 +2320,14 @@ export default function AgentesIaPage() {
                             </p>
                           )}
                         </div>
+                        {ferramenta.tipo === "interpretar_arquivo" &&
+                          ferramentaAtiva(ferramenta.tipo) && (
+                            <button type="button" className={styles.secondaryButton}
+                              onClick={() => setModalLeituraAberto(true)}
+                              style={{ marginTop: 8 }}>
+                              <BookOpen size={16} /> Configurar leitura
+                            </button>
+                          )}
                         {ferramenta.tipo === "criar_agendamento" &&
                           ferramentaAtiva(ferramenta.tipo) && (
                             <TipoAgendamentoFerramentaSelect
@@ -2633,6 +2648,17 @@ export default function AgentesIaPage() {
           conhecimento={conhecimentoEditando}
           onClose={() => setConhecimentoEditando(null)}
           onSaved={aplicarConhecimentoAtualizado}
+        />
+      )}
+
+      {modalLeituraAberto && editor && (
+        <LeituraArquivoFerramentaModal
+          value={configFerramenta("interpretar_arquivo").orientacoes}
+          onClose={() => setModalLeituraAberto(false)}
+          onApply={(orientacoes) => {
+            atualizarConfigFerramenta("interpretar_arquivo", "orientacoes", orientacoes);
+            setModalLeituraAberto(false);
+          }}
         />
       )}
 

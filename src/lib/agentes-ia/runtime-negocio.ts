@@ -5,6 +5,7 @@ import OpenAI from "openai";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { validarReservaAgenteIa } from "./validar-reserva";
 import { conteudoMensagemComInterpretacaoImagem } from "./interpretacao-imagem";
+import { conteudoMensagemComAnaliseArquivo } from "./interpretacao-arquivo";
 import { registrarUsoTokensIa } from "@/lib/ia/tokens";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
@@ -343,11 +344,16 @@ async function carregarHistorico(
       role: item.remetente_tipo === "contato" ? ("user" as const) : ("assistant" as const),
       content:
         item.remetente_tipo === "contato"
-          ? conteudoMensagemComInterpretacaoImagem({
-              conteudo: item.conteudo,
+          ? conteudoMensagemComAnaliseArquivo({
+              conteudo: conteudoMensagemComInterpretacaoImagem({
+                conteudo: item.conteudo,
+                tipoMensagem: item.tipo_mensagem,
+                metadataJson: item.metadata_json,
+                limite: 1500,
+              }),
               tipoMensagem: item.tipo_mensagem,
               metadataJson: item.metadata_json,
-              limite: 500,
+              limite: 1800,
             })
           : String(item.conteudo || "").slice(0, 500),
     }));

@@ -8,6 +8,7 @@ import { detectarAutomacaoExterna, type ResultadoDeteccaoAutomacaoExterna } from
 import { processarPendenciaAgenteIa as processarPendenciaAgenteIaBase } from "./runtime-v3";
 import { processarPendenciaNegocio } from "./runtime-negocio";
 import { prepararImagensPendenciaAgente } from "./interpretacao-imagem";
+import { prepararArquivosPendenciaAgente } from "./interpretacao-arquivo";
 
 const supabaseAdmin = getSupabaseAdmin();
 
@@ -475,6 +476,28 @@ export async function processarPendenciaAgenteIa(
       "[AGENTE_IA_IMAGEM] Falha ao preparar interpretação visual; atendimento seguirá sem visão:",
       imagemError
     );
+  }
+
+  // Arquivos PDF/Excel/Word: leitura automática opcional por agente,
+  // antes de qualquer runtime, com metadados persistidos para o histórico.
+  try {
+    const arquivos = await prepararArquivosPendenciaAgente({
+      pendenciaId,
+      empresaId: pendencia.empresa_id,
+      agenteId: pendencia.agente_id,
+      conversaId: pendencia.conversa_id,
+      mensagemIds: Array.isArray(pendencia.mensagem_ids)
+        ? pendencia.mensagem_ids : [],
+      conteudoAgregado: pendencia.conteudo_agregado,
+    });
+    if (arquivos.detectados) {
+      console.info("[AGENTE_IA_ARQUIVO] Leitura da interação", {
+        pendenciaId, detectados: arquivos.detectados,
+        analisados: arquivos.analisados, falhas: arquivos.falhas,
+      });
+    }
+  } catch (error) {
+    console.error("[AGENTE_IA_ARQUIVO] Falha na preparação; atendimento seguirá sem alegar leitura", error);
   }
 
   const negocio = await processarPendenciaNegocio(pendenciaId, options);
