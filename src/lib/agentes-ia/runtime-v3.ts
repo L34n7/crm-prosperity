@@ -3500,9 +3500,16 @@ function promessaOperacionalNaoExecutada(
       ? "enviar_material" : "acao_sem_ferramenta";
   }
 
+  // Acolhimento ("vou te ajudar a verificar as opções") não é uma
+  // promessa de consulta operacional; só bloquear promessas efetivas.
+  // Preserva as demais promessas da mesma mensagem para validação.
+  const textoSemApoioConsultivo = texto.replace(
+    /\b(?:vou|irei|posso|podemos)\s+(?:(?:te|lhe)\s+)?(?:ajudar|auxiliar|orientar)\s+(?:a\s+)?(?:consultar|verificar|checar|confirmar|analisar|avaliar|entender)\b/g,
+    "ajudar",
+  );
   const prometeuConsultaConhecimento =
-    /\b(?:vou|irei|posso|podemos|quer que eu|quer que a gente)\b.{0,80}\b(?:consultar|verificar|checar|confirmar|buscar|procurar)\b/.test(texto) &&
-    !/\b(?:agenda|horario|horarios|disponibilidade)\b/.test(texto);
+    /\b(?:vou|irei|posso|podemos|quer que eu|quer que a gente)\b.{0,80}\b(?:consultar|verificar|checar|confirmar|buscar|procurar)\b/.test(textoSemApoioConsultivo) &&
+    !/\b(?:agenda|horario|horarios|disponibilidade)\b/.test(textoSemApoioConsultivo);
 
   if (
     prometeuConsultaConhecimento &&
@@ -3520,9 +3527,9 @@ function promessaOperacionalNaoExecutada(
     return "consultar_conhecimento";
   }
 
-  if (/\b(?:vou|irei|posso|podemos)\s+(?:consultar|verificar|checar|confirmar|analisar|retornar|retomar)\b/.test(texto) ||
-      /\b(?:vou|irei)\s+(?:te\s+)?chamar\b/.test(texto) ||
-      /\b(?:ja|já)\s+te\s+(?:retorno|aviso|passo)\b/.test(texto)) {
+  if (/\b(?:vou|irei|posso|podemos)\s+(?:consultar|verificar|checar|confirmar|analisar|retornar|retomar)\b/.test(textoSemApoioConsultivo) ||
+      /\b(?:vou|irei)\s+(?:te\s+)?chamar\b/.test(textoSemApoioConsultivo) ||
+      /\b(?:ja|já)\s+te\s+(?:retorno|aviso|passo)\b/.test(textoSemApoioConsultivo)) {
     return "acao_sem_ferramenta";
   }
 
@@ -4127,9 +4134,13 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
         }
 
         if (promessaPendente) {
-          candidata.mensagens = [
-            "Não consegui concluir essa ação agora. Me passe o dado que falta e eu resolvo por aqui sem deixar nada pendente.",
-          ];
+          // Se esgotar a recuperação numa saudação, nunca responder com
+          // erro técnico nem pedir "o dado que falta": o cliente só cumprimentou.
+          const entradaNormalizada = normalizarTextoIntencao(pendencia.conteudo_agregado);
+          const saudacaoInicial = /^(?:oi+|ola+|bom dia|boa tarde|boa noite|opa|alo|e ai)(?: (?:tudo bem|tudo bom))?$/.test(entradaNormalizada);
+          candidata.mensagens = saudacaoInicial
+            ? [`Olá! Eu sou ${agente.nome}. Como posso te ajudar hoje?`]
+            : ["Não consegui confirmar essa informação agora. Pode me explicar brevemente o que você precisa?"];
         }
         saidaFinal = candidata;
         break;
