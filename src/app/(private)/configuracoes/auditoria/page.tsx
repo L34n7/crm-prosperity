@@ -25,6 +25,18 @@ const CATEGORIAS = [
   "setores",
   "perfis",
   "sistema",
+  "agentes_ia",
+  "configuracoes",
+  "cotacao_veicular",
+  "white_label",
+  "email_marketing",
+  "whatsapp",
+  "agenda",
+  "estoque",
+  "financeiro",
+  "saude",
+  "imobiliario",
+  "automacoes",
 ];
 
 const ENTIDADES = [
@@ -62,6 +74,11 @@ type LogAuditoria = {
   depois: JsonValue;
   metadata: JsonValue;
   created_at: string;
+};
+
+type FacetaAuditoria = {
+  categoria: string;
+  entidade: string;
 };
 
 type UsuarioOpcao = {
@@ -129,6 +146,7 @@ function JsonBlock({ titulo, valor }: { titulo: string; valor: JsonValue }) {
 export default function AuditoriaPage() {
   const [logs, setLogs] = useState<LogAuditoria[]>([]);
   const [usuarios, setUsuarios] = useState<UsuarioOpcao[]>([]);
+  const [facetas, setFacetas] = useState<FacetaAuditoria[]>([]);
   const [filtrosFormulario, setFiltrosFormulario] =
     useState<Filtros>(FILTROS_INICIAIS);
   const [filtrosAplicados, setFiltrosAplicados] =
@@ -185,6 +203,7 @@ export default function AuditoriaPage() {
 
       setLogs(data.logs || []);
       setUsuarios(data.usuarios || []);
+      setFacetas(data.facetas || []);
       setTotal(data.paginacao?.total || 0);
       setTotalPaginas(data.paginacao?.total_paginas || 1);
     } catch (error) {
@@ -220,6 +239,20 @@ export default function AuditoriaPage() {
     setFiltrosAplicados(FILTROS_INICIAIS);
     setPagina(1);
   }
+
+  const categoriasDisponiveis = [...new Set([
+    ...CATEGORIAS,
+    ...facetas.map((faceta) => faceta.categoria),
+  ])].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const entidadesDisponiveis = [...new Set([
+    ...ENTIDADES,
+    ...facetas
+      .filter((faceta) =>
+        !filtrosFormulario.categoria ||
+        faceta.categoria === filtrosFormulario.categoria
+      )
+      .map((faceta) => faceta.entidade),
+  ])].sort((a, b) => a.localeCompare(b, "pt-BR"));
 
   const primeiroItem = total === 0 ? 0 : (pagina - 1) * ITENS_POR_PAGINA + 1;
   const ultimoItem = Math.min(pagina * ITENS_POR_PAGINA, total);
@@ -269,7 +302,7 @@ export default function AuditoriaPage() {
                 }
               >
                 <option value="">Todas</option>
-                {CATEGORIAS.map((categoria) => (
+                {categoriasDisponiveis.map((categoria) => (
                   <option key={categoria} value={categoria}>
                     {formatarRotulo(categoria)}
                   </option>
@@ -286,7 +319,7 @@ export default function AuditoriaPage() {
                 }
               >
                 <option value="">Todas</option>
-                {ENTIDADES.map((entidade) => (
+                {entidadesDisponiveis.map((entidade) => (
                   <option key={entidade} value={entidade}>
                     {formatarRotulo(entidade)}
                   </option>

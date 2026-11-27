@@ -123,6 +123,7 @@ export async function GET(request: Request) {
     const [
       { data, error, count },
       { data: usuarios, error: usuariosError },
+      { data: facetas, error: facetasError },
     ] = await Promise.all([
       query.order("created_at", { ascending: false }).range(inicio, fim),
       supabaseAdmin
@@ -130,11 +131,14 @@ export async function GET(request: Request) {
         .select("id, nome, email")
         .eq("empresa_id", usuario.empresa_id)
         .order("nome", { ascending: true }),
+      supabaseAdmin.rpc("crm_auditoria_facetas_v2", {
+        p_empresa_id: usuario.empresa_id,
+      }),
     ]);
 
-    if (error || usuariosError) {
+    if (error || usuariosError || facetasError) {
       return NextResponse.json(
-        { ok: false, error: error?.message || usuariosError?.message },
+        { ok: false, error: error?.message || usuariosError?.message || facetasError?.message },
         { status: 500 }
       );
     }
@@ -146,6 +150,7 @@ export async function GET(request: Request) {
         detalhes: ocultarDadosPessoaisRedundantes(log.detalhes),
       })),
       usuarios: usuarios || [],
+      facetas: facetas || [],
       paginacao: {
         pagina,
         limite: limit,
