@@ -38,6 +38,10 @@ import {
   materiaisAposLink,
   solicitouCotacaoPorLink,
 } from "./cotacao-link-direto";
+import {
+  configurarTratamentoOfertaExterna,
+  ehOfertaComercialExterna,
+} from "./ofertas-comerciais-externas";
 import { processAutomationEngine as processAutomationEngineFluxos } from "@/lib/automacoes/process-automation-engine-agenda";
 import type { AutomationEngineInput } from "@/lib/automacoes/types";
 import { conteudoMensagemComInterpretacaoImagem } from "./interpretacao-imagem";
@@ -3878,6 +3882,61 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
       }).eq("id", execucaoId);
       await finalizarPendencia({ pendencia, lockToken, status: "processado" });
       return { ok: true, processado: true, fallback: true, motivo: "saldo_tokens_ia_esgotado" };
+    }
+
+    // Oferta comercial externa recebida de terceiro: resposta institucional
+    // determinística, SEM consulta à IA nem consumo de tokens. Configuração
+    // explícita por agente, sem interferir em propostas de proteção veicular.
+    const configOfertaExterna = configurarTratamentoOfertaExterna(
+      (agente as AgenteRow).metadata_json?.tratamento_ofertas_externas,
+    );
+    if (configOfertaExterna && ehOfertaComercialExterna(pendencia.conteudo_agregado)) {
+      // Evita responder repetidamente a campanhas encaminhadas ao mesmo
+      // número na mesma conversa; não bloqueia novas dúvidas reais.
+      const { data: respostasAnteriores, error: erroConsultaAnteriores } =
+        await supabaseAdmin.from("agente_ia_execucoes")
+          .select("id")
+          .eq("empresa_id", pendencia.empresa_id)
+          .eq("agente_id", agente.id)
+          .eq("conversa_id", pendencia.conversa_id)
+          .eq("status", "concluido")
+          .contains("metadata_json", { oferta_comercial_externa_backend: true })
+          .neq("id", execucaoId)
+          .limit(1);
+      if (erroConsultaAnteriores) {
+        console.error("[AGENTE_IA] Falha ao consultar respostas a ofertas externas",
+          erroConsultaAnteriores);
+      }
+      const jaRespondida = (respostasAnteriores || []).length > 0;
+      const envio = jaRespondida
+        ? { supersedido: false, mensagensEnviadas: 0 }
+        : await enviarMensagensAgente(ctx, [configOfertaExterna.mensagem]);
+
+      const cancelado = envio.supersedido || (!jaRespondida && envio.mensagensEnviadas === 0);
+      const agoraOferta = new Date().toISOString();
+      await supabaseAdmin.from("agente_ia_execucoes").update({
+        status: cancelado ? "cancelado" : "concluido",
+        erro: cancelado ? "oferta_externa_supersedida_ou_sem_destino" : null,
+        resposta: jaRespondida ? null : envio.mensagensEnviadas > 0
+          ? configOfertaExterna.mensagem : null,
+        tokens_input: 0,
+        tokens_output: 0,
+        tokens_total: 0,
+        latencia_ms: Date.now() - inicio,
+        finished_at: agoraOferta,
+        updated_at: agoraOferta,
+        metadata_json: {
+          oferta_comercial_externa_backend: !cancelado,
+          origem_tratamento: "oferta_externa_nao_relacionada_ao_atendimento",
+          resposta_institucional_enviada: envio.mensagensEnviadas > 0,
+          oferta_externa_repetida: jaRespondida,
+          processamento_sem_modelo_ia: true,
+        },
+      }).eq("id", execucaoId);
+      await finalizarPendencia({ pendencia, lockToken, status: "processado" });
+      return { ok: true, processado: true, ofertaExterna: true,
+        respostaEnviada: envio.mensagensEnviadas > 0,
+        repetida: jaRespondida, supersedido: cancelado };
     }
 
     // Para os agentes opt-in, o link da cotação deve anteceder QUALQUER
