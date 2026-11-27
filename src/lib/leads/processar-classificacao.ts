@@ -4,6 +4,7 @@ import { buscarSaldoTokensIa, registrarUsoTokensIa } from "@/lib/ia/tokens";
 import { getWhatsAppAccessToken } from "@/lib/whatsapp/access-token";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 import { envioAutomaticoEstaBloqueado } from "@/lib/whatsapp/bloqueio-automatico-conversa";
+import { automacoesContatoEstaoDesabilitadas } from "@/lib/contatos/automacoes";
 import { classificarMensagemPorRegras, classificacaoAutomaticaProtegida, type DecisaoClassificacao } from "./classificacao-automatica";
 import type { ClassificacaoLead } from "./classificacao";
 
@@ -242,7 +243,7 @@ export async function processarClassificacaoPendente(pendencia: Pendencia) {
       return { ok: true, motivo: "nao_elegivel" };
     }
     const { data: contato } = await db.from("contatos")
-      .select("id,classificacao,classificacao_atualizada_em")
+      .select("id,classificacao,classificacao_atualizada_em,automacoes_desabilitadas")
       .eq("empresa_id", pendencia.empresa_id).eq("id", conversa.contato_id).maybeSingle();
     if (!contato) {
       await finalizar("concluido");
@@ -254,6 +255,20 @@ export async function processarClassificacaoPendente(pendencia: Pendencia) {
     if (classificacaoAutomaticaProtegida(contato.classificacao)) {
       await finalizar("concluido");
       return { ok: true, motivo: "convertido_preservado" };
+    }
+
+    // Respeitar a opção "Desabilitar automações" do contato e da integração
+    // desta conversa. A fila pode ter sido criada antes de o operador desabilitar.
+    if (
+      contato.automacoes_desabilitadas === true ||
+      (await automacoesContatoEstaoDesabilitadas({
+        empresaId: pendencia.empresa_id,
+        contatoId: contato.id,
+        integracaoWhatsappId: conversa.integracao_whatsapp_id,
+      }))
+    ) {
+      await finalizar("concluido");
+      return { ok: true, motivo: "automacoes_desabilitadas" };
     }
 
     const texto = textoDaMensagem(mensagem as MensagemLead);

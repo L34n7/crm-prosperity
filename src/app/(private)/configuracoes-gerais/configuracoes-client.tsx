@@ -121,7 +121,6 @@ export default function ConfiguracoesClient({
   const [classificacao, setClassificacao] = useState<ConfigClassificacao>(CLASSIFICACAO_PADRAO);
   const [classificacaoSalva, setClassificacaoSalva] = useState<ConfigClassificacao>(CLASSIFICACAO_PADRAO);
   const [carregandoClassificacao, setCarregandoClassificacao] = useState(true);
-  const [salvandoClassificacao, setSalvandoClassificacao] = useState(false);
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
 
@@ -145,6 +144,7 @@ export default function ConfiguracoesClient({
     !empresaWhiteLabel &&
     Boolean(empresa && form.nicho_id !== empresa.nicho_id);
   const alterouFormulario = Boolean(empresa) && JSON.stringify(form) !== JSON.stringify(paraForm(empresa!));
+  const alterouClassificacao = JSON.stringify(classificacao) !== JSON.stringify(classificacaoSalva);
   const trocaDeGrupo = Boolean(empresa?.nicho && nichoSelecionado) && empresa?.nicho?.grupo !== nichoSelecionado?.grupo;
 
   useEffect(() => {
@@ -221,25 +221,6 @@ export default function ConfiguracoesClient({
     return () => { ativo = false; };
   }, [reportarErro]);
 
-  async function salvarClassificacao() {
-    setSalvandoClassificacao(true);
-    try {
-      const resposta = await fetch("/api/configuracoes/classificacao", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(classificacao),
-      });
-      const json = await resposta.json();
-      if (!resposta.ok || !json.ok) throw new Error(json.error || "Erro ao salvar classificação.");
-      setClassificacaoSalva(classificacao);
-      reportarSucesso("Classificação automática atualizada.");
-    } catch (error) {
-      reportarErro(error instanceof Error ? error.message : "Erro ao salvar classificação.");
-    } finally {
-      setSalvandoClassificacao(false);
-    }
-  }
-
   function atualizar(campo: keyof FormEmpresa, valor: string) {
     setForm((atual) => ({ ...atual, [campo]: valor }));
     setErro("");
@@ -248,31 +229,57 @@ export default function ConfiguracoesClient({
   }
 
   async function salvar() {
-    if (!alterouFormulario) return;
+    if (salvando || carregandoClassificacao || (!alterouFormulario && !alterouClassificacao)) return;
     if (alterouNicho && !confirmandoNicho) {
       setConfirmandoNicho(true);
       return;
     }
 
+    let empresaSalva = false;
     try {
       setSalvando(true);
       setErro("");
       setSucesso("");
-      const response = await fetch("/api/configuracoes/empresa", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Erro ao salvar as configurações.");
-      setEmpresa(data.empresa);
-      setForm(paraForm(data.empresa));
-      setNichos(data.nichos || nichos);
-      setConfirmandoNicho(false);
-      setSucesso(data.message || "Configurações salvas com sucesso.");
-      router.refresh();
+
+      // Um único botão salva os dados da empresa e a classificação.
+      // Atualizamos os estados salvos individualmente para permitir tentar
+      // novamente apenas a etapa que falhou, sem perder outras alterações.
+      if (alterouFormulario) {
+        const response = await fetch("/api/configuracoes/empresa", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(form),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Erro ao salvar os dados da empresa.");
+        setEmpresa(data.empresa);
+        setForm(paraForm(data.empresa));
+        setNichos(data.nichos || nichos);
+        setConfirmandoNicho(false);
+        empresaSalva = true;
+      }
+
+      if (alterouClassificacao) {
+        const response = await fetch("/api/configuracoes/classificacao", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(classificacao),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || "Erro ao salvar a classificação automática.");
+        }
+        setClassificacaoSalva(classificacao);
+      }
+
+      setSucesso("Todas as alterações foram salvas com sucesso.");
+      if (empresaSalva) router.refresh();
     } catch (error) {
-      setErro(error instanceof Error ? error.message : "Erro ao salvar as configurações.");
+      const motivo = error instanceof Error ? error.message : "Erro ao salvar as configurações.";
+      setErro(empresaSalva
+        ? `Dados da empresa salvos, mas a classificação não foi salva: ${motivo}`
+        : motivo);
+      if (empresaSalva) router.refresh();
     } finally {
       setSalvando(false);
     }
@@ -410,23 +417,16 @@ export default function ConfiguracoesClient({
                     <small>Horas sem resposta após a última mensagem enviada. Padrão: 23h.</small>
                   </label>
                 </div>
-                <p className={styles.leadClassificationHint}>Ao identificar recusa, o sistema encerra apenas automações e atendimento do bot. Conversas atendidas por pessoas não são encerradas.</p>
-                <div className={styles.leadClassificationActions}>
-                  <button type="button" className={styles.primaryButton}
-                    onClick={() => void salvarClassificacao()}
-                    disabled={salvandoClassificacao || JSON.stringify(classificacao) === JSON.stringify(classificacaoSalva)}>
-                    <Save size={16} /> {salvandoClassificacao ? "Salvando..." : "Salvar classificação"}
-                  </button>
-                </div>
+                <p className={styles.leadClassificationHint}>Ao identificar recusa, o sistema encerra apenas automações e atendimento do bot. Conversas atendidas por pessoas não são encerradas. Conversas com "Desabilitar automações" não recebem classificação automática.</p>
               </div>
             )}
             <div className={styles.footer}>
               <p>
                 {empresaWhiteLabel
-                  ? "Os dados cadastrais serão salvos mantendo o nicho Comercial predefinido."
-                  : "Todos os dados e o nicho serão salvos juntos."}
+                  ? "Os dados cadastrais e a classificação serão salvos juntos, mantendo o nicho Comercial predefinido."
+                  : "Todos os dados, o nicho e a classificação automática serão salvos juntos."}
               </p>
-              <button type="button" className={styles.primaryButton} onClick={salvar} disabled={salvando || !alterouFormulario || form.nome_fantasia.trim().length < 2 || !form.email.trim()}><Save size={17} />{salvando ? "Salvando..." : confirmandoNicho ? "Confirmar e salvar" : "Salvar alterações"}</button>
+              <button type="button" className={styles.primaryButton} onClick={salvar} disabled={salvando || carregandoClassificacao || (!alterouFormulario && !alterouClassificacao) || (alterouFormulario && (form.nome_fantasia.trim().length < 2 || !form.email.trim()))}><Save size={17} />{salvando ? "Salvando..." : confirmandoNicho ? "Confirmar e salvar" : "Salvar alterações"}</button>
             </div>
           </section>
         ) : <section className={styles.loadingCard}>Não foi possível identificar a empresa.</section>}

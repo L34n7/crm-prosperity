@@ -93,7 +93,7 @@ export const NICHOS_CONFIG: Record<NichoCodigo, NichoConfig> = {
   },
   seguro_veicular: {
     codigo: "seguro_veicular",
-    nome: "Seguro Veicular",
+    nome: "Proteção veicular",
     grupo: "comercial",
     cadastroSingular: "Cliente",
     cadastroPlural: "Clientes",
