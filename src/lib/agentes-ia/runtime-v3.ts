@@ -3870,27 +3870,13 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
       agendamentosAtivos: [],
     };
 
-    const saldo = await buscarSaldoTokensIa(pendencia.empresa_id);
-    if (saldo.limite !== null && Number(saldo.restantes || 0) <= 0) {
-      await executarFallbackFluxos(pendencia);
-      await supabaseAdmin.from("agente_ia_execucoes").update({
-        status: "fallback",
-        erro: "saldo_tokens_ia_esgotado",
-        finished_at: new Date().toISOString(),
-        latencia_ms: Date.now() - inicio,
-        updated_at: new Date().toISOString(),
-      }).eq("id", execucaoId);
-      await finalizarPendencia({ pendencia, lockToken, status: "processado" });
-      return { ok: true, processado: true, fallback: true, motivo: "saldo_tokens_ia_esgotado" };
-    }
-
-    // Oferta comercial externa recebida de terceiro: resposta institucional
-    // determinística, SEM consulta à IA nem consumo de tokens. Configuração
-    // explícita por agente, sem interferir em propostas de proteção veicular.
+    // Regra GLOBAL para TODOS os agentes e empresas, antes da cobrança de
+    // tokens da IA. A personalização opcional por agente altera apenas o texto.
+    // Não intercepta pedidos legítimos de atendimento, orçamento ou suporte.
     const configOfertaExterna = configurarTratamentoOfertaExterna(
       (agente as AgenteRow).metadata_json?.tratamento_ofertas_externas,
     );
-    if (configOfertaExterna && ehOfertaComercialExterna(pendencia.conteudo_agregado)) {
+    if (ehOfertaComercialExterna(pendencia.conteudo_agregado)) {
       // Evita responder repetidamente a campanhas encaminhadas ao mesmo
       // número na mesma conversa; não bloqueia novas dúvidas reais.
       const { data: respostasAnteriores, error: erroConsultaAnteriores } =
@@ -3927,6 +3913,7 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
         updated_at: agoraOferta,
         metadata_json: {
           oferta_comercial_externa_backend: !cancelado,
+          regra_global_ofertas_externas: true,
           origem_tratamento: "oferta_externa_nao_relacionada_ao_atendimento",
           resposta_institucional_enviada: envio.mensagensEnviadas > 0,
           oferta_externa_repetida: jaRespondida,
@@ -3937,6 +3924,20 @@ export async function processarPendenciaAgenteIa(pendenciaId: string, options: {
       return { ok: true, processado: true, ofertaExterna: true,
         respostaEnviada: envio.mensagensEnviadas > 0,
         repetida: jaRespondida, supersedido: cancelado };
+    }
+
+    const saldo = await buscarSaldoTokensIa(pendencia.empresa_id);
+    if (saldo.limite !== null && Number(saldo.restantes || 0) <= 0) {
+      await executarFallbackFluxos(pendencia);
+      await supabaseAdmin.from("agente_ia_execucoes").update({
+        status: "fallback",
+        erro: "saldo_tokens_ia_esgotado",
+        finished_at: new Date().toISOString(),
+        latencia_ms: Date.now() - inicio,
+        updated_at: new Date().toISOString(),
+      }).eq("id", execucaoId);
+      await finalizarPendencia({ pendencia, lockToken, status: "processado" });
+      return { ok: true, processado: true, fallback: true, motivo: "saldo_tokens_ia_esgotado" };
     }
 
     // Para os agentes opt-in, o link da cotação deve anteceder QUALQUER
