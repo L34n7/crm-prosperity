@@ -76,6 +76,64 @@ function arquivoMensagem(mensagem: MensagemArquivo) {
   return { mediaId, nome: nomeFinal, mime: suportado ? EXTENSOES[extensao] : mime, extensao, suportado };
 }
 
+
+/**
+ * Nunca confie apenas no nome informado no WhatsApp: é comum o Android e
+ * aplicativos de nuvem enviarem application/octet-stream sem extensão.
+ * Reconhecemos pela assinatura real dos bytes (magic bytes + estrutura).
+ */
+function identificarFormatoReal(buffer: Buffer, info: ReturnType<typeof arquivoMensagem>) {
+  if (!buffer.length) return null;
+  const cabecalho = buffer.subarray(0, Math.min(buffer.length, 1024));
+  const pdf = cabecalho.includes(Buffer.from("%PDF-"));
+  if (pdf) return { extensao: "pdf", mime: EXTENSOES.pdf, origem: "assinatura_pdf" };
+  if (buffer.subarray(0, 5).toString("ascii") === "{\\rtf") {
+    return { extensao: "rtf", mime: EXTENSOES.rtf, origem: "assinatura_rtf" };
+  }
+
+  const zip = buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4b &&
+    (buffer[2] === 0x03 || buffer[2] === 0x05 || buffer[2] === 0x07);
+  if (zip) {
+    // Os nomes das entradas aparecem em texto no diretório central do ZIP.
+    if (buffer.includes(Buffer.from("word/document.xml"))) {
+      return { extensao: "docx", mime: EXTENSOES.docx, origem: "assinatura_docx" };
+    }
+    if (buffer.includes(Buffer.from("xl/workbook.xml"))) {
+      return { extensao: "xlsx", mime: EXTENSOES.xlsx, origem: "assinatura_xlsx" };
+    }
+    return null; // ZIP genérico não deve ser interpretado como documento.
+  }
+
+  const ole = buffer.length >= 8 &&
+    buffer.subarray(0, 8).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]));
+  if (ole) {
+    if (buffer.includes(Buffer.from("WordDocument", "utf16le"))) {
+      return { extensao: "doc", mime: EXTENSOES.doc, origem: "assinatura_doc" };
+    }
+    if (buffer.includes(Buffer.from("Workbook", "utf16le")) ||
+        buffer.includes(Buffer.from("Book", "utf16le"))) {
+      return { extensao: "xls", mime: EXTENSOES.xls, origem: "assinatura_xls" };
+    }
+    if (info.extensao === "doc" || info.extensao === "xls") {
+      return { extensao: info.extensao, mime: EXTENSOES[info.extensao], origem: "ole_com_extensao" };
+    }
+    return null;
+  }
+
+  // CSV e TXT não possuem assinatura binária padronizada.
+  // Exigimos extensão ou MIME explícito e rejeitamos atalhos/HTML.
+  if (["csv", "txt"].includes(info.extensao || "") && buffer.length <= MAX_BYTES_ARQUIVO) {
+    const amostra = buffer.subarray(0, Math.min(buffer.length, 4096)).toString("utf8");
+    const semBom = amostra.replace(/^\uFEFF/, "").trimStart();
+    const pareceHtml = /^<!doctype html|^<html\b|^<\?xml\b/i.test(semBom);
+    const temNulos = buffer.subarray(0, Math.min(buffer.length, 4096)).includes(0);
+    if (!pareceHtml && !temNulos) {
+      return { extensao: info.extensao, mime: EXTENSOES[info.extensao], origem: "texto_com_extensao" };
+    }
+  }
+  return null;
+}
+
 function saidaLeitura(valor: unknown) {
   const json = objeto(valor);
   const itens = (campo: string) => Array.isArray(json[campo])
@@ -142,15 +200,37 @@ async function analisarDocumento(params: {
   bytesDisponiveis: number;
 }) {
   const info = arquivoMensagem(params.mensagem);
-  if (!info.suportado) {
-    return { status: "nao_suportado", resumo: "Formato de arquivo não suportado para leitura automática. Envie PDF, Word ou Excel.", bytes: 0 };
-  }
   if (!info.mediaId) {
     return { status: "falha", resumo: "O arquivo chegou sem identificador de mídia para leitura. Peça reenvio ou encaminhe ao humano.", bytes: 0 };
+  }
+  if (params.bytesDisponiveis <= 0) {
+    return { status: "falha", resumo: "Limite de tamanho de arquivos atingido nesta interação. Envie até dois arquivos de no máximo 12 MB cada.", bytes: 0 };
   }
   const arquivo = await baixarMidiaWhatsapp({
     mediaId: info.mediaId, accessToken: params.accessToken,
     maxBytes: Math.min(params.bytesDisponiveis, MAX_BYTES_ARQUIVO),
+  });
+  const formato = identificarFormatoReal(arquivo.buffer, info);
+  if (!formato) {
+    console.warn("[AGENTE_IA_ARQUIVO] Conteúdo sem assinatura de formato aceito", {
+      empresaId: params.empresaId, mensagemId: params.mensagem.id,
+      mimeWhatsApp: info.mime, mimeMeta: arquivo.mimeType,
+      bytes: arquivo.buffer.length,
+    });
+    return {
+      status: "nao_suportado",
+      resumo: "O anexo não contém um PDF, Word ou Excel válido reconhecível. Pode ser um atalho ou link de nuvem. Envie o arquivo original em PDF/Excel/Word ou uma imagem nítida.",
+      bytes: arquivo.buffer.length,
+      mime: info.mime,
+      formato: "desconhecido",
+    };
+  }
+  const nomeNormalizado = info.nome.toLowerCase().endsWith("." + formato.extensao)
+    ? info.nome
+    : info.nome.replace(/\.(pdf|docx?|xlsx?|csv|txt|rtf)$/i, "") + "." + formato.extensao;
+  console.info("[AGENTE_IA_ARQUIVO] Formato identificado", {
+    mensagemId: params.mensagem.id, formato: formato.extensao,
+    origem: formato.origem, mimeMeta: arquivo.mimeType,
   });
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const orientacoes = params.orientacoes;
@@ -172,7 +252,7 @@ async function analisarDocumento(params: {
     personalizadas ? "Priorize as instruções opcionais acima sem violar as regras de fidelidade aos dados." : "Use a análise padrão geral do documento.",
   ].join("\n");
   const upload = await client.files.create({
-    file: await toFile(arquivo.buffer, info.nome, { type: info.mime }),
+    file: await toFile(arquivo.buffer, nomeNormalizado, { type: formato.mime }),
     purpose: "user_data",
   });
   try {
@@ -207,7 +287,7 @@ async function analisarDocumento(params: {
           empresaId: params.empresaId, origem: "agente_ia_arquivo",
           modelo: MODELO, uso: extrairUsoTokensIa(resp.usage),
           metadata: { agente_id: params.agenteId, mensagem_id: params.mensagem.id,
-            mime_type: info.mime, bytes: arquivo.buffer.length },
+            mime_type: formato.mime, bytes: arquivo.buffer.length },
         });
       } catch (error) {
         console.error("[AGENTE_IA_ARQUIVO] Falha ao contabilizar tokens", error);
@@ -216,7 +296,7 @@ async function analisarDocumento(params: {
     const textoResposta = String(resp.output_text || "").trim();
     if (!textoResposta) throw new Error("A análise não retornou dados.");
     const resultado = saidaLeitura(JSON.parse(textoResposta));
-    return { ...resultado, bytes: arquivo.buffer.length };
+    return { ...resultado, bytes: arquivo.buffer.length, mime: formato.mime, formato: formato.extensao };
   } finally {
     await client.files.delete(upload.id).catch((error) => {
       console.error("[AGENTE_IA_ARQUIVO] Falha ao remover upload temporário", error);
@@ -243,7 +323,24 @@ export async function prepararArquivosPendenciaAgente(params: {
     .eq("remetente_tipo", "contato").eq("tipo_mensagem", "documento")
     .in("id", params.mensagemIds).order("created_at", { ascending: true });
   if (eMensagens) throw new Error(eMensagens.message);
-  const documentos = (mensagens || []) as MensagemArquivo[];
+  let documentos = (mensagens || []) as MensagemArquivo[];
+
+  // Um usuário pode pedir para reler o anexo anterior após uma falha ou
+  // atualização do leitor, sem precisar enviar novamente o documento.
+  // Somente arquivos da mesma conversa e das últimas 48 horas.
+  const pediuReleitura = /(?:analis\w*|leia|ler|interpret\w*|verific\w*).{0,70}(?:pdf|documento|arquivo|extrato)|(?:pdf|documento|arquivo|extrato).{0,70}(?:analis\w*|leia|ler|interpret\w*|verific\w*)/i
+    .test(params.conteudoAgregado);
+  if (!documentos.length && pediuReleitura) {
+    const limite = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const { data: ultimo, error: erroUltimo } = await supabase
+      .from("mensagens").select("id,conteudo,metadata_json")
+      .eq("empresa_id", params.empresaId).eq("conversa_id", params.conversaId)
+      .eq("remetente_tipo", "contato").eq("tipo_mensagem", "documento")
+      .gte("created_at", limite).order("created_at", { ascending: false })
+      .limit(1);
+    if (erroUltimo) throw new Error(erroUltimo.message);
+    documentos = (ultimo || []) as MensagemArquivo[];
+  }
   let contexto = params.conteudoAgregado || "";
   let analisados = 0;
   let falhas = 0;
@@ -252,28 +349,30 @@ export async function prepararArquivosPendenciaAgente(params: {
   for (const mensagem of documentos.slice(0, MAX_ARQUIVOS)) {
     const info = arquivoMensagem(mensagem);
     const chave = createHash("sha256").update(
-      "v1|" + info.mediaId + "|" + info.nome + "|" + JSON.stringify(orientacoes),
+      "v2-magic|" + info.mediaId + "|" + info.nome + "|" + JSON.stringify(orientacoes),
     ).digest("hex");
     const anterior = objeto(objeto(mensagem.metadata_json).agente_ia_interpretacao_arquivo);
     let analise = anterior;
-    if (texto(anterior.chave) !== chave ||
+    const falhaAntiga = texto(anterior.status) === "falha" &&
+      Date.now() - new Date(texto(anterior.analisado_em) || 0).getTime() > 15 * 60 * 1000;
+    if (texto(anterior.chave) !== chave || falhaAntiga ||
         !["analisado", "parcial", "ilegivel", "falha", "nao_suportado"].includes(texto(anterior.status))) {
       try {
-        if (!token && info.suportado && info.mediaId) {
+        if (!token && info.mediaId) {
           token = await tokenDaConversa(params.empresaId, params.conversaId);
         }
-        const resultado = info.suportado && info.mediaId
+        const resultado = info.mediaId
           ? await analisarDocumento({
               empresaId: params.empresaId, agenteId: params.agenteId,
               mensagem, accessToken: token || "", orientacoes, chave,
               bytesDisponiveis: Math.max(0, MAX_BYTES_LOTE - bytes),
             })
-          : info.suportado
-            ? { status: "falha", resumo: "Arquivo sem identificador de mídia; reenvie ou encaminhe ao consultor.", bytes: 0 }
-            : { status: "nao_suportado", resumo: "Formato não suportado. Envie PDF, Excel ou Word.", bytes: 0 };
+          : { status: "falha", resumo: "Arquivo sem identificador de mídia. Reenvie como anexo ou encaminhe ao consultor.", bytes: 0 };
         bytes += resultado.bytes;
         analise = { chave, status: resultado.status, resumo: resultado.resumo,
-          nome: info.nome, mime_type: info.mime, modelo: MODELO,
+          nome: info.nome, mime_type: "mime" in resultado ? resultado.mime : info.mime,
+          formato_identificado: "formato" in resultado ? resultado.formato : null,
+          modelo: MODELO,
           analisado_em: new Date().toISOString() };
       } catch (error) {
         console.error("[AGENTE_IA_ARQUIVO] Erro ao interpretar", {
