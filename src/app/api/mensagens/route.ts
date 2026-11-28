@@ -10,6 +10,8 @@ import {
 } from "@/lib/auth/authorization";
 import { usuarioPodeVisualizarConversa as usuarioPodeAcessarConversa } from "@/lib/conversas/visibilidade";
 import { canSendFreeformWhatsAppMessage } from "@/lib/whatsapp/can-send-message";
+import { verificarJanelaInstagram } from "@/lib/instagram/janela-mensagens";
+import { enviarAtendimentoInstagram } from "@/lib/instagram/enviar-atendimento";
 import { sendWhatsAppTextMessage } from "@/lib/whatsapp/send-text-message";
 import { encerrarConversaExpirada } from "@/lib/whatsapp/encerrar-conversa-expirada";
 import {
@@ -44,6 +46,8 @@ type ConversaAcesso = {
   historico_importado?: boolean | null;
   contato_id?: string | null;
   integracao_whatsapp_id?: string | null;
+  integracao_instagram_id?: string | null;
+  canal?: string | null;
 };
 
 type ProtocoloAtivo = {
@@ -366,7 +370,7 @@ export async function GET(request: Request) {
     const { data: conversa, error: conversaError } = await supabaseAdmin
       .from("conversas")
       .select(
-        "id, empresa_id, setor_id, escopo_fila, responsavel_id, bot_ativo, status, origem_atendimento, historico_importado, contato_id, integracao_whatsapp_id"
+        "id, empresa_id, setor_id, escopo_fila, responsavel_id, bot_ativo, status, origem_atendimento, historico_importado, contato_id, integracao_whatsapp_id, integracao_instagram_id, canal"
       )
       .eq("id", conversaId)
       .maybeSingle<ConversaAcesso>();
@@ -419,7 +423,9 @@ export async function GET(request: Request) {
       });
     }
 
-    const janela24h = await canSendFreeformWhatsAppMessage({ conversaId });
+    const janela24h = conversa.canal === "instagram"
+      ? await verificarJanelaInstagram(conversaId)
+      : await canSendFreeformWhatsAppMessage({ conversaId });
 
     if (mensagemAlvoId) {
       const resultadoAlvo = await carregarMensagensAteMensagemAlvo({
@@ -772,7 +778,7 @@ export async function POST(request: Request) {
   const { data: conversa, error: conversaError } = await supabaseAdmin
     .from("conversas")
     .select(
-      "id, empresa_id, setor_id, escopo_fila, responsavel_id, bot_ativo, status, contato_id, integracao_whatsapp_id"
+      "id, empresa_id, setor_id, escopo_fila, responsavel_id, bot_ativo, status, contato_id, integracao_whatsapp_id, integracao_instagram_id, canal"
     )
     .eq("id", conversa_id)
     .maybeSingle<ConversaAcesso>();
@@ -822,6 +828,24 @@ export async function POST(request: Request) {
       { ok: false, error: "A conversa não possui contato vinculado" },
       { status: 400 }
     );
+  }
+
+  if (conversa.canal === "instagram") {
+    const envio = await enviarAtendimentoInstagram({
+      empresaId: conversa.empresa_id,
+      conversaId: conversa_id,
+      contatoId: conversa.contato_id,
+      integracaoId: conversa.integracao_instagram_id || "",
+      remetenteId: usuario.id,
+      conteudo,
+    });
+    if (!envio.ok) {
+      return NextResponse.json({ ok: false, error: envio.error }, { status: envio.status });
+    }
+    await publicarMensagemEnviadaRegistrada({
+      empresaId: conversa.empresa_id, conversaId: conversa_id, mensagemId: envio.mensagem.id,
+    });
+    return NextResponse.json({ ok: true, message: "Direct enviado com sucesso.", mensagem: envio.mensagem });
   }
 
   if (!conversa.integracao_whatsapp_id) {

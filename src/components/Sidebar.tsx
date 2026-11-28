@@ -26,6 +26,7 @@ import {
   Bot,
   Workflow,
   MessageCircle,
+  Camera as Instagram,
   ScrollText,
   MousePointerClick,
   CreditCard,
@@ -73,6 +74,7 @@ type SidebarProps = {
   isAdmin?: boolean;
   nichoCodigo?: NichoCodigo;
   podeAcessarWhatsappWebLocal?: boolean;
+  podeAcessarInstagram?: boolean;
   branding?: WhiteLabelBranding;
 };
 
@@ -113,6 +115,11 @@ const menuItems: MenuItem[] = [
     href: "/conversas",
     icon: MessageSquare,
     permissao: "conversas.visualizar",
+  },
+  {
+    label: "Instagram",
+    href: "/instagram",
+    icon: Instagram,
   },
   {
     label: "Disparos",
@@ -280,6 +287,7 @@ export default function Sidebar({
   isAdmin = false,
   nichoCodigo = "comercio",
   podeAcessarWhatsappWebLocal = false,
+  podeAcessarInstagram = false,
   branding = BRANDING_PROSPERITY,
 }: SidebarProps) {
   const pathname = usePathname();
@@ -385,6 +393,9 @@ export default function Sidebar({
     }
 
     if (item.href === "/whatsapp-web" && !podeAcessarWhatsappWebLocal) {
+      return false;
+    }
+    if (item.href === "/instagram" && !podeAcessarInstagram) {
       return false;
     }
 

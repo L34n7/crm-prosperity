@@ -14,6 +14,7 @@ import type { NichoCodigo } from "@/lib/nichos/config";
 import { empresaPodeAcessarWhatsappWebLocal } from "@/lib/whatsapp-web/acesso";
 import { obterBrandingPorHost } from "@/lib/white-label/branding";
 import { BRANDING_PROSPERITY } from "@/lib/white-label/types";
+import { podeAcessarInstagram } from "@/lib/instagram/config";
 
 export default async function PrivateLayout({
   children,
@@ -36,6 +37,7 @@ export default async function PrivateLayout({
   let nichoCodigo: NichoCodigo = "comercio";
   let exibirAceitePrograma = false;
   let podeAcessarWhatsappWebLocal = false;
+  let instagramDisponivel = false;
 
   const resultado = await getUsuarioContexto();
 
@@ -85,6 +87,7 @@ export default async function PrivateLayout({
   }
 
   if (resultado.usuario.empresa_id) {
+    instagramDisponivel = podeAcessarInstagram(resultado.usuario.empresa_id);
     try {
       podeAcessarWhatsappWebLocal =
         await empresaPodeAcessarWhatsappWebLocal(resultado.usuario.empresa_id);
@@ -113,6 +116,7 @@ export default async function PrivateLayout({
       isAdmin={isAdmin}
       nichoCodigo={nichoCodigo}
       podeAcessarWhatsappWebLocal={podeAcessarWhatsappWebLocal}
+      podeAcessarInstagram={instagramDisponivel}
       branding={branding}
     >
       {acessoTemporario && (

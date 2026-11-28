@@ -22,6 +22,7 @@ type CrmShellProps = {
   isAdmin?: boolean;
   nichoCodigo?: NichoCodigo;
   podeAcessarWhatsappWebLocal?: boolean;
+  podeAcessarInstagram?: boolean;
   branding?: WhiteLabelBranding;
 };
 
@@ -35,6 +36,7 @@ export default function CrmShell({
   isAdmin = false,
   nichoCodigo = "comercio",
   podeAcessarWhatsappWebLocal = false,
+  podeAcessarInstagram = false,
   branding,
 }: CrmShellProps) {
   return (
@@ -55,6 +57,7 @@ export default function CrmShell({
             isAdmin={isAdmin}
             nichoCodigo={nichoCodigo}
             podeAcessarWhatsappWebLocal={podeAcessarWhatsappWebLocal}
+            podeAcessarInstagram={podeAcessarInstagram}
             branding={branding}
           />
 

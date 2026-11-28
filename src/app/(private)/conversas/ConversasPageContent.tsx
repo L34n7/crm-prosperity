@@ -351,7 +351,7 @@ export default function ConversasPageContent() {
   const [busca, setBusca] = useState("");
   const [buscaDebounced, setBuscaDebounced] = useState("");
   const [statusFiltro, setStatusFiltro] = useState("Todas");
-  const [canalFiltro, setCanalFiltro] = useState("todos");
+  const [canalFiltro, setCanalFiltro] = useState(() => searchParams.get("canal") === "instagram" ? "instagram" : "todos");
   const [setorFiltro, setSetorFiltro] = useState("todos");
   const [responsavelFiltro, setResponsavelFiltro] = useState("todos");
   const [integracaoWhatsappFiltro, setIntegracaoWhatsappFiltro] =
@@ -6749,7 +6749,7 @@ async function baixarConversaPDF() {
     conversaEhMinha &&
     !conversaNaFila;
 
-  const podeEnviarMidia = podeEnviarMensagem && podeEnviarMidiaPermissao;
+  const podeEnviarMidia = podeEnviarMensagem && podeEnviarMidiaPermissao && conversaSelecionada?.canal !== "instagram";
 
   const setoresDisponiveisParaTransferencia = useMemo(() => {
     if (ehAdministrador) {
@@ -6992,6 +6992,7 @@ const templateFooterTexto = useMemo(() => {
 
   const mostrarDisparoIndividual =
     !!conversaSelecionada &&
+    conversaSelecionada.canal !== "instagram" &&
     !conversaHistoricoImportado &&
     !conversaComBotAtivo &&
     (!janela24hAberta || !!conversaEncerrada);
